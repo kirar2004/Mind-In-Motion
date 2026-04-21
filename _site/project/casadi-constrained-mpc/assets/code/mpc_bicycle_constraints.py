@@ -462,7 +462,7 @@ def plot_results(cfg, obstacles, state_array, control_array, time_state, time_co
     ax_speed.grid(True, alpha=0.25)
 
     ax_controls.step(time_control, control_array[:, 0], where="post", linewidth=2.0, label="acceleration")
-    axControls.step(time_control, control_array[:, 1], where="post", linewidth=2.0, label="steering")
+    ax_controls.step(time_control, control_array[:, 1], where="post", linewidth=2.0, label="steering")
     ax_controls.axhline(cfg.a_min, color="tab:blue", linestyle=":", linewidth=1.0)
     ax_controls.axhline(cfg.a_max, color="tab:blue", linestyle=":", linewidth=1.0)
     ax_controls.axhline(cfg.delta_min, color="tab:orange", linestyle=":", linewidth=1.0)
