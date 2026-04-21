@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560">
+<rect width="900" height="560" fill="#f8fbff"/>
+<text x="36" y="42" font-size="28" font-family="Georgia, serif" fill="#1e3a8a">Tracking, Speed, and Steering</text>
+<rect x="70" y="80" width="780" height="140" rx="16" fill="white" stroke="#cbd5e1"/>
+<line x1="70" y1="220.0" x2="850" y2="220.0" stroke="#111827" stroke-dasharray="5 5" opacity="0.55"/>
+<line x1="70" y1="80.0" x2="850" y2="80.0" stroke="#111827" stroke-dasharray="5 5" opacity="0.55"/>
+<polyline points="70.0,150.0 94.4,149.5 118.8,148.7 143.1,148.7 167.5,148.9 191.9,147.9 216.3,144.0 240.6,136.6 265.0,127.9 289.4,120.5 313.8,114.6 338.1,111.5 362.5,112.6 386.9,116.7 411.2,123.1 435.6,131.1 460.0,140.4 484.4,150.0 508.8,159.9 533.1,170.3 557.5,179.8 581.9,187.1 606.2,191.5 630.6,192.9 655.0,191.0 679.4,185.8 703.8,177.9 728.1,168.4 752.5,159.4 776.9,153.0 801.2,149.9 825.6,149.1 850.0,149.4" fill="none" stroke="#2563eb" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="82" y="104" font-size="15" font-family="Arial" fill="#0f172a">lateral position [m]</text>
+<line x1="62" y1="220.0" x2="70" y2="220.0" stroke="#334155"/>
+<text x="56" y="225.0" text-anchor="end" font-size="13" font-family="Arial" fill="#334155">-4.0</text>
+<line x1="62" y1="150.0" x2="70" y2="150.0" stroke="#334155"/>
+<text x="56" y="155.0" text-anchor="end" font-size="13" font-family="Arial" fill="#334155">0.0</text>
+<line x1="62" y1="80.0" x2="70" y2="80.0" stroke="#334155"/>
+<text x="56" y="85.0" text-anchor="end" font-size="13" font-family="Arial" fill="#334155">4.0</text>
+<rect x="70" y="240" width="780" height="120" rx="16" fill="white" stroke="#cbd5e1"/>
+<polyline points="70.0,336.9 94.4,330.4 118.8,317.6 143.1,306.0 167.5,298.4 191.9,295.5 216.3,297.8 240.6,304.8 265.0,313.2 289.4,320.9 313.8,325.3 338.1,324.9 362.5,320.2 386.9,312.2 411.2,303.7 435.6,296.8 460.0,291.4 484.4,291.3 508.8,297.5 533.1,309.9 557.5,321.4 581.9,331.1 606.2,336.4 630.6,334.5 655.0,327.0 679.4,314.5 703.8,300.7 728.1,286.8 752.5,275.3 776.9,266.4 801.2,259.6 825.6,255.3 850.0,252.3" fill="none" stroke="#059669" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="82" y="264" font-size="15" font-family="Arial" fill="#0f172a">speed [m/s]</text>
+<line x1="62" y1="360.0" x2="70" y2="360.0" stroke="#334155"/>
+<text x="56" y="365.0" text-anchor="end" font-size="13" font-family="Arial" fill="#334155">7.0</text>
+<line x1="62" y1="300.0" x2="70" y2="300.0" stroke="#334155"/>
+<text x="56" y="305.0" text-anchor="end" font-size="13" font-family="Arial" fill="#334155">8.3</text>
+<line x1="62" y1="240.0" x2="70" y2="240.0" stroke="#334155"/>
+<text x="56" y="245.0" text-anchor="end" font-size="13" font-family="Arial" fill="#334155">9.6</text>
+<rect x="70" y="390" width="780" height="120" rx="16" fill="white" stroke="#cbd5e1"/>
+<polyline points="70.0,430.7 94.4,452.8 118.8,456.2 143.1,435.4 167.5,429.3 191.9,400.1 216.3,414.0 240.6,443.1 265.0,470.7 289.4,453.2 313.8,502.6 338.1,484.6 362.5,473.0 386.9,465.5 411.2,457.1 435.6,455.0 460.0,441.4 484.4,455.5 508.8,448.5 533.1,428.0 557.5,410.7 581.9,409.8 606.2,404.7 630.6,401.6 655.0,409.0 679.4,424.3 703.8,435.5 728.1,470.5 752.5,470.8 776.9,478.6 801.2,452.0 825.6,454.6 850.0,442.3" fill="none" stroke="#d97706" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="82" y="414" font-size="15" font-family="Arial" fill="#0f172a">steering [rad]</text>
+<line x1="62" y1="510.0" x2="70" y2="510.0" stroke="#334155"/>
+<text x="56" y="515.0" text-anchor="end" font-size="13" font-family="Arial" fill="#334155">-0.4</text>
+<line x1="62" y1="450.0" x2="70" y2="450.0" stroke="#334155"/>
+<text x="56" y="455.0" text-anchor="end" font-size="13" font-family="Arial" fill="#334155">-0.0</text>
+<line x1="62" y1="390.0" x2="70" y2="390.0" stroke="#334155"/>
+<text x="56" y="395.0" text-anchor="end" font-size="13" font-family="Arial" fill="#334155">0.3</text>
+<line x1="70.0" y1="510" x2="70.0" y2="518" stroke="#334155"/>
+<text x="70.0" y="540" text-anchor="middle" font-size="14" font-family="Arial" fill="#334155">0</text>
+<line x1="200.0" y1="510" x2="200.0" y2="518" stroke="#334155"/>
+<text x="200.0" y="540" text-anchor="middle" font-size="14" font-family="Arial" fill="#334155">1</text>
+<line x1="330.0" y1="510" x2="330.0" y2="518" stroke="#334155"/>
+<text x="330.0" y="540" text-anchor="middle" font-size="14" font-family="Arial" fill="#334155">2</text>
+<line x1="460.0" y1="510" x2="460.0" y2="518" stroke="#334155"/>
+<text x="460.0" y="540" text-anchor="middle" font-size="14" font-family="Arial" fill="#334155">3</text>
+<line x1="590.0" y1="510" x2="590.0" y2="518" stroke="#334155"/>
+<text x="590.0" y="540" text-anchor="middle" font-size="14" font-family="Arial" fill="#334155">4</text>
+<line x1="720.0" y1="510" x2="720.0" y2="518" stroke="#334155"/>
+<text x="720.0" y="540" text-anchor="middle" font-size="14" font-family="Arial" fill="#334155">5</text>
+<line x1="850.0" y1="510" x2="850.0" y2="518" stroke="#334155"/>
+<text x="850.0" y="540" text-anchor="middle" font-size="14" font-family="Arial" fill="#334155">6</text>
+<text x="460" y="552" text-anchor="middle" font-size="16" font-family="Arial" fill="#0f172a">time [s]</text>
+</svg>
