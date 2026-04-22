@@ -1,11 +1,10 @@
 ---
 title: Talks and Presentations
 description: |
-  Presentations, talks, and workshops.
+  Talk pages and presentation notes.
 listing:
   contents:
-    - "**/*.qmd"
-    - "**/*.md"
+    - "train-control-talk-template/index.qmd"
   sort: "date desc"
   type: default
   categories: true
