@@ -3,8 +3,14 @@ project:
   output-dir: docs
   render:
     - "index.qmd"
+    - "blog/index.qmd"
+    - "blog/optimal-control-template/index.qmd"
+    - "blog/optimization-workflow-template/index.qmd"
     - "project/index.qmd"
     - "project/casadi-constrained-mpc/index.qmd"
+    - "project/mpc-project-template/index.qmd"
+    - "talk/index.qmd"
+    - "talk/train-control-talk-template/index.qmd"
     - "about/index.*md"
     - "colophon/index.*md"
   post-render:
@@ -29,8 +35,12 @@ website:
     title: Mind In Motion
     background: light
     right:
+      - text: Blog
+        href: blog/index.qmd
       - text: Projects
         href: project/index.qmd
+      - text: Talks
+        href: talk/index.qmd
       - text: About
         href: about/index.qmd
       - icon: github
