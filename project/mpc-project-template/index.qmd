@@ -1,0 +1,38 @@
+---
+title: "MPC Project Template"
+description: "Reusable structure for nonlinear MPC project pages"
+summary: "Template for modeling, constraints, solver setup, and results"
+date: '2026-01-01'
+slug: mpc-project-template
+tags:
+  - Project
+  - Model Predictive Control
+links:
+  - icon: github
+    name: Source
+    url: https://github.com/kirar2004
+---
+
+## Overview
+
+State the project objective and operating context.
+
+## Problem Setup
+
+Define model equations, states, inputs, constraints, and references.
+
+## Method
+
+Describe solver formulation, discretization, and tuning strategy.
+
+## Results
+
+Report tracking, constraint activity, and computation performance.
+
+## Next Steps
+
+List extensions such as robustness, estimation, or deployment.
+
+## References
+
+Add code, paper links, and benchmark datasets.
