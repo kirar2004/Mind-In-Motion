@@ -3,7 +3,7 @@ library(dplyr)
 library(purrr)
 library(gh)
 
-author <- "gadenbuie"
+author <- "kirar2004"
 start_date <- Sys.Date() - 7
 
 search_created <- sprintf("author:%s created:>%sT00:00:00Z", author, start_date)
@@ -32,7 +32,7 @@ work_data <-
     }) |>
     list_rbind() |>
       mutate(
-        personal = grepl("(^gadenbuie)|bluesky-comments", repository),
+        personal = grepl("(^kirar2004)|bluesky-comments", repository),
         action_at = coalesce(closed_at, created_at),
         action = recode(state, open = "opened"),
         action = paste(action, if_else(is_issue, "an issue", "a PR")),

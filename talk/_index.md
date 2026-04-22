@@ -2,7 +2,7 @@
 title: Talks and Presentations
 description: |
   Presentations, talks, and workshops.
-author: "Garrick Aden-Buie"
+author: "Arun Kumar Kantheti"
 show_post_thumbnail: true
 show_author_byline: false
 show_post_date: true
@@ -20,14 +20,14 @@ sidebar:
 
     Check out the _index.md file in the /talk folder
     to edit this content.
-  author: "The R Markdown Team @RStudio"
+  author: "Arun Kumar Kantheti"
   text_link_label: Subscribe via RSS
   text_link_url: /talk/index.xml
   show_sidebar_adunit: false # show ad container
 
 # set up common front matter for all pages inside blog/
 cascade:
-  author: "Garrick Aden-Buie"
+  author: "Arun Kumar Kantheti"
   show_author_byline: false
   show_post_date: true
   show_post_time: false
