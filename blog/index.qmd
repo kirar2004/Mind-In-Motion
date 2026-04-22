@@ -1,13 +1,11 @@
 ---
 title: My Blog
 description: >
-  Mostly things I've figured out and wanted to share with you.
-  Or remember later. Or things I wrote about because I wanted
-  to learn something new. Occasional ramblings, sometimes thoughts.
+  Notes, experiments, and write-ups on control systems, optimization, and related tooling.
 listing:
   contents:
-    - "**/*.qmd"
-    - "**/*.md"
+    - "optimal-control-template/index.qmd"
+    - "optimization-workflow-template/index.qmd"
   sort: "date desc"
   type: default
   categories: true
@@ -15,7 +13,7 @@ listing:
   filter-ui: true
   fields: [date, title, reading-time, image, description, categories]
   feed:
-    categories: [R]
+    categories: [control]
   image-align: left
 page-layout: full
 title-block-banner: false
