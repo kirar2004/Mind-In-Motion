@@ -1,0 +1,50 @@
+---
+title: "Train Control Talk Template"
+author:
+  - Arun Kumar Kantheti
+description: |
+  Reusable talk page for train control and optimization presentations.
+date: '2026-01-01'
+slug: train-control-talk-template
+
+tags:
+  - Talk
+  - Train Control
+
+talk_author: [Arun Kumar Kantheti]
+categories: [ Conference ]
+event: "Event Name"
+event_url: https://example.com
+location: "Location"
+links:
+  - icon: file-slides-fill
+    name: Slides
+    url: https://example.com/slides
+  - icon: github
+    name: Code
+    url: https://github.com/kirar2004
+---
+
+## Overview
+
+State audience, scope, and key takeaway.
+
+## Problem Setup
+
+Describe system context, constraints, and engineering challenge.
+
+## Method
+
+Outline approach, architecture, and technical decisions.
+
+## Results
+
+Highlight quantitative outcomes and practical implications.
+
+## Next Steps
+
+List future work and deployment considerations.
+
+## References
+
+Add slides, repository, and reading links.
