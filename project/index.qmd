@@ -5,6 +5,7 @@ description: |
 listing:
   contents:
     - "casadi-constrained-mpc/index.qmd"
+    - "mpc-project-template/index.qmd"
   sort: "date desc"
   type: grid
   categories: false
