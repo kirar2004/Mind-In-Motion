@@ -1,0 +1,34 @@
+---
+title: "Optimization Workflow Note"
+description: >
+  Reusable template for workflow, tooling, and experiment logs.
+date: 2026-01-01T00:00:00+00:00
+slug: optimization-workflow-template
+categories:
+  - Control
+  - Tooling
+---
+
+## Overview
+
+State the workflow goal and expected output.
+
+## Problem Setup
+
+Describe inputs, data sources, and environment setup.
+
+## Method
+
+Document scripts, packages, and analysis steps.
+
+## Results
+
+Capture outcomes, artifacts, and decisions.
+
+## Next Steps
+
+List follow-up tasks and automation ideas.
+
+## References
+
+Add links to repositories, APIs, and docs.
