@@ -1,10 +1,10 @@
 ---
 title: Projects
 description: |
-  All (or most, or at least some) of my projects.
+  Reusable project pages and published work.
 listing:
   contents:
-    - "**/*.qmd"
+    - "casadi-constrained-mpc/index.qmd"
   sort: "date desc"
   type: grid
   categories: false
