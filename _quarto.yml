@@ -1,63 +1,54 @@
 project:
   type: website
+  output-dir: docs
   render:
-    - "*.qmd"
-    - "*.md"
-    - "blog/**/*.qmd"
-    - "talk/**/*.qmd"
-    - "project/**/*.qmd"
+    - "index.qmd"
+    - "project/index.qmd"
+    - "project/casadi-constrained-mpc/index.qmd"
     - "about/index.*md"
     - "colophon/index.*md"
   post-render:
     # - "rsync --recursive --prune-empty-dirs --copy-links --safe-links static/. _site/"
-    - "cp -r static/. _site/"
+    - "cp -r static/. docs/"
 
 website:
-  title: "Garrick Aden-Buie"
-  site-url: https://www.garrickadenbuie.com
-  repo-url: https://github.com/gadenbuie/garrickadenbuie-com
+  title: "Arun Kumar Kantheti"
+  site-url: https://kirar2004.github.io/Mind-In-Motion
+  repo-url: https://github.com/kirar2004/Mind-In-Motion
   repo-actions:
     - source
     - edit
     - issue
   twitter-card:
-    creator: "@grrrck"
-    site: "@grrrck"
+    creator: "@kirar2004"
+    site: "@kirar2004"
     card-style: summary_large_image
     image: social-default.png
   open-graph: true
   navbar:
-    title: garrick
+    title: Mind In Motion
     background: light
     right:
-      - text: blog
-        href: blog/index.qmd
-      - text: projects
+      - text: Projects
         href: project/index.qmd
-      - text: talks
-        href: talk/index.qmd
-      - text: about
+      - text: About
         href: about/index.qmd
       - icon: github
-        href: https://github.com/gadenbuie
-      - icon: mastodon
-        href: https://fosstodon.org/@grrrck
+        href: https://github.com/kirar2004
+      - icon: linkedin
+        href: https://www.linkedin.com/in/kirar2004
+
   page-footer:
     border: false
     background: light
     left: >-
-       © {{< now year >}} Garrick Aden-Buie
+       © {{< now year >}} Arun Kumar Kantheti
     right: >-
       <a class="link-dark me-1" href="/colophon">Made with 💙</a>
-      <a class="link-dark" href="/blog/index.xml" title = "RSS feed"><i class="bi bi-rss-fill"><span class="visually-hidden">RSS feed</span></i></a>
     center: >-
-      <a class="link-dark" href="https://bsky.app/profile/grrrck.xyz" title="bluesky" target="_blank" rel="noopener">{{< fa brands bluesky >}}</a>
-      <a class="link-dark" href="https://fosstodon.org/@grrrck" title="mastodon" target="_blank" rel="noopener">{{< fa brands mastodon >}}</a>
-      <a class="link-dark" href="https://github.com/gadenbuie" title="github" target="_blank" rel="noopener">{{< fa brands github >}}</a>
-      <a class="link-dark" href="https://gadenbuie.r-universe.dev" title="r-project" target="_blank" rel="noopener">{{< fa brands r-project >}}</a>
-      <a class="link-dark" href="https://keybase.io/grrrck" title="keybase" target="_blank" rel="noopener">{{< fa brands keybase >}}</a>
-      <a class="link-dark" href="https://garrickadenbuie.bandcamp.com" title="bandcamp" target="_blank" rel="noopener">{{< fa brands bandcamp >}}</a>
-      <a class="link-dark" href="http://orcid.org/0000-0002-7111-0077" title="orcid" target="_blank" rel="noopener">{{< ai orcid >}}</a>
+      <a class="link-dark" href="https://x.com/kirar2004" title="twitter-x" target="_blank" rel="noopener">{{< fa brands twitter >}}</a>
+      <a class="link-dark" href="https://www.linkedin.com/in/kirar2004" title="linkedin" target="_blank" rel="noopener">{{< fa brands linkedin>}}</a>
+      <a class="link-dark" href="http://orcid.org/0000-0003-3150-0254" title="orcid" target="_blank" rel="noopener">{{< ai orcid >}}</a>
 
 format:
   html:
@@ -83,4 +74,3 @@ format:
 
 execute:
   freeze: auto
-
