@@ -1,0 +1,34 @@
+---
+title: "Optimal Control Note"
+description: >
+  Reusable template for documenting an optimal control problem and solution.
+date: 2026-01-01T00:00:00+00:00
+slug: optimal-control-template
+categories:
+  - Control
+  - Optimization
+---
+
+## Overview
+
+State the motivation and scope.
+
+## Problem Setup
+
+Define system model, variables, constraints, and assumptions.
+
+## Method
+
+Describe the optimization/control approach and implementation details.
+
+## Results
+
+Summarize trajectories, metrics, and key observations.
+
+## Next Steps
+
+List improvements, extensions, or open questions.
+
+## References
+
+Add citations, datasets, and related links.
