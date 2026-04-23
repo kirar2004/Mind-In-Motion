@@ -3,11 +3,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent
-os.environ.setdefault("MPLCONFIGDIR", str(PROJECT_DIR / ".mplconfig"))
+os.environ.setdefault("MPLCONFIGDIR", str(Path("/tmp") / "mplconfig-casadi-mpc"))
 
 import casadi as ca
 import matplotlib
 matplotlib.use("Agg")
+from matplotlib import animation
+from matplotlib.patches import Circle, Polygon
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -19,6 +21,13 @@ class Obstacle:
     y: float
     rx: float
     ry: float
+
+
+@dataclass
+class Scenario:
+    name: str
+    label: str
+    obstacles: tuple[Obstacle, Obstacle]
 
 
 @dataclass
@@ -50,10 +59,46 @@ def reference_speed(x):
     return 9.0 - slowdown_1 - slowdown_2
 
 
-def obstacle_ellipses():
+def make_obstacles(
+    first_position=(20.0, 0.0),
+    second_position=(36.0, 2.0),
+    first_radii=(3.0, 1.3),
+    second_radii=(2.8, 1.25),
+):
+    """Build obstacle ellipses from center and radius parameters."""
+    return (
+        Obstacle(x=first_position[0], y=first_position[1], rx=first_radii[0], ry=first_radii[1]),
+        Obstacle(x=second_position[0], y=second_position[1], rx=second_radii[0], ry=second_radii[1]),
+    )
+
+
+def scenario_library():
     return [
-        Obstacle(x=20.0, y=0.0, rx=3.0, ry=1.3),
-        Obstacle(x=36.0, y=2.0, rx=2.8, ry=1.25),
+        Scenario(
+            name="baseline",
+            label="Baseline: staggered obstacles",
+            obstacles=make_obstacles((20.0, 0.0), (36.0, 2.0)),
+        ),
+        Scenario(
+            name="lower_upper",
+            label="Lower then upper obstacles",
+            obstacles=make_obstacles((17.0, -1.5), (34.0, 2.3)),
+        ),
+        Scenario(
+            name="middle_gate",
+            label="Middle gate",
+            obstacles=make_obstacles((20.0, -1.8), (35.0, 1.8)),
+        ),
+        Scenario(
+            name="late_gate",
+            label="Late gate",
+            obstacles=make_obstacles((23.0, -1.4), (39.0, 1.4)),
+        ),
+        Scenario(
+            name="same_lower_side",
+            label="Same-side lower obstacles",
+            obstacles=make_obstacles((20.0, -1.6), (36.0, -0.4)),
+        ),
     ]
 
 
@@ -372,9 +417,8 @@ class BicycleMPC:
         return np.array(states)
 
 
-def simulate():
-    cfg = MPCConfig()
-    obstacles = obstacle_ellipses()
+def simulate_scenario(cfg, scenario):
+    obstacles = scenario.obstacles
     controller = BicycleMPC(cfg, obstacles)
 
     x = np.array([0.0, 0.0, 0.0, 7.5])
@@ -407,8 +451,59 @@ def simulate():
     time_state = cfg.dt * np.arange(state_array.shape[0])
     time_control = cfg.dt * np.arange(control_array.shape[0])
 
-    output_dir = PROJECT_DIR / "outputs"
-    output_dir.mkdir(exist_ok=True)
+    return {
+        "scenario": scenario,
+        "cfg": cfg,
+        "obstacles": obstacles,
+        "states": state_array,
+        "controls": control_array,
+        "time_state": time_state,
+        "time_control": time_control,
+        "costs": np.array(costs),
+        "solve_progress": np.array(solve_progress),
+    }
+
+
+def scenario_metrics(result):
+    cfg = result["cfg"]
+    obstacles = result["obstacles"]
+    states = result["states"]
+    controls = result["controls"]
+    time_control = result["time_control"]
+    margins = obstacle_margin_series(obstacles, states[:-1])
+    y_ref = reference_lane(states[:, 0])
+    v_ref = reference_speed(states[:, 0])
+    if len(time_control) > 1:
+        accel_variation = np.sum(np.abs(np.diff(controls[:, 0])))
+        steer_variation = np.sum(np.abs(np.diff(controls[:, 1])))
+    else:
+        accel_variation = 0.0
+        steer_variation = 0.0
+    return {
+        "scenario": result["scenario"].name,
+        "label": result["scenario"].label,
+        "obstacle_1_x": obstacles[0].x,
+        "obstacle_1_y": obstacles[0].y,
+        "obstacle_2_x": obstacles[1].x,
+        "obstacle_2_y": obstacles[1].y,
+        "final_x_m": states[-1, 0],
+        "max_abs_y_m": np.max(np.abs(states[:, 1])),
+        "rms_lateral_error_m": np.sqrt(np.mean((states[:, 1] - y_ref) ** 2)),
+        "rms_speed_error_mps": np.sqrt(np.mean((states[:, 3] - v_ref) ** 2)),
+        "max_speed_mps": np.max(states[:, 3]),
+        "max_abs_steer_rad": np.max(np.abs(controls[:, 1])),
+        "min_obstacle_margin": np.min(margins),
+        "accel_variation": accel_variation,
+        "steer_variation": steer_variation,
+        "mean_stage_cost": np.mean(result["costs"]),
+        "elapsed_time_s": cfg.dt * max(len(states) - 1, 0),
+    }
+
+
+def save_primary_results(result, code_dir):
+    state_array = result["states"]
+    control_array = result["controls"]
+    time_control = result["time_control"]
 
     results = pd.DataFrame(
         {
@@ -419,119 +514,289 @@ def simulate():
             "speed_mps": state_array[:-1, 3],
             "accel_mps2": control_array[:, 0],
             "steer_rad": control_array[:, 1],
-            "stage_cost": costs,
-            "predicted_terminal_x": solve_progress,
+            "stage_cost": result["costs"],
+            "predicted_terminal_x": result["solve_progress"],
         }
     )
-    results.to_csv(output_dir / "closed_loop_results.csv", index=False)
-
-    plot_results(cfg, obstacles, state_array, control_array, time_state, time_control, costs, output_dir)
+    results.to_csv(code_dir / "closed_loop_results.csv", index=False)
 
 
-def plot_results(cfg, obstacles, state_array, control_array, time_state, time_control, costs, output_dir):
-    x_dense = np.linspace(0.0, max(55.0, state_array[-1, 0] + 3.0), 500)
-    y_dense = reference_lane(x_dense)
-    v_dense = reference_speed(x_dense)
+def simulate():
+    cfg = MPCConfig()
+    plots_dir = PROJECT_DIR.parent / "plots"
+    code_dir = PROJECT_DIR
+    plots_dir.mkdir(exist_ok=True)
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    ax_path, ax_speed, ax_controls, ax_constraints = axes.flatten()
+    scenarios = scenario_library()
+    primary = simulate_scenario(cfg, scenarios[0])
+    comparison_results = [simulate_scenario(cfg, scenario) for scenario in scenarios[1:]]
 
-    ax_path.plot(x_dense, y_dense, "--", color="tab:blue", linewidth=2.0, label="reference centerline")
-    ax_path.plot(state_array[:, 0], state_array[:, 1], color="tab:red", linewidth=2.6, label="closed-loop trajectory")
-    ax_path.axhline(cfg.road_half_width, color="black", linestyle=":", linewidth=1.0)
-    ax_path.axhline(-cfg.road_half_width, color="black", linestyle=":", linewidth=1.0)
-    for obstacle in obstacles:
-        theta = np.linspace(0.0, 2.0 * np.pi, 150)
-        x_obs = obstacle.x + obstacle.rx * np.cos(theta)
-        y_obs = obstacle.y + obstacle.ry * np.sin(theta)
-        ax_path.fill(x_obs, y_obs, color="gray", alpha=0.35)
-    ax_path.set_title("Vehicle Path and Obstacle Constraints")
-    ax_path.set_xlabel("x position [m]")
-    ax_path.set_ylabel("y position [m]")
-    ax_path.legend(loc="upper right")
-    ax_path.grid(True, alpha=0.25)
+    save_primary_results(primary, code_dir)
+    pd.DataFrame([scenario_metrics(result) for result in [primary] + comparison_results]).to_csv(
+        code_dir / "scenario_comparison_metrics.csv",
+        index=False,
+    )
 
-    ax_speed.plot(x_dense, v_dense, "--", color="tab:green", linewidth=2.0, label="speed reference")
-    ax_speed.plot(state_array[:, 0], state_array[:, 3], color="tab:orange", linewidth=2.6, label="actual speed")
-    ax_speed.axhline(cfg.v_min, color="black", linestyle=":", linewidth=1.0)
-    ax_speed.axhline(cfg.v_max, color="black", linestyle=":", linewidth=1.0)
-    ax_speed.set_title("Position-Dependent Speed Tracking")
-    ax_speed.set_xlabel("x position [m]")
-    ax_speed.set_ylabel("speed [m/s]")
-    ax_speed.legend(loc="upper right")
-    ax_speed.grid(True, alpha=0.25)
+    plot_geometry(cfg, primary, plots_dir)
+    plot_results(primary, plots_dir)
+    animate_closed_loop(primary, plots_dir)
+    plot_scenario_comparison(comparison_results, plots_dir)
 
-    ax_controls.step(time_control, control_array[:, 0], where="post", linewidth=2.0, label="acceleration")
-    ax_controls.step(time_control, control_array[:, 1], where="post", linewidth=2.0, label="steering")
-    ax_controls.axhline(cfg.a_min, color="tab:blue", linestyle=":", linewidth=1.0)
-    ax_controls.axhline(cfg.a_max, color="tab:blue", linestyle=":", linewidth=1.0)
-    ax_controls.axhline(cfg.delta_min, color="tab:orange", linestyle=":", linewidth=1.0)
-    ax_controls.axhline(cfg.delta_max, color="tab:orange", linestyle=":", linewidth=1.0)
-    ax_controls.set_title("Constrained Control Inputs")
-    ax_controls.set_xlabel("time [s]")
-    ax_controls.set_ylabel("input value")
-    ax_controls.legend(loc="upper right")
-    ax_controls.grid(True, alpha=0.25)
 
+def obstacle_margin_series(obstacles, states):
     obstacle_margins = []
-    for state in state_array[:-1]:
+    for state in states:
         margins = [
             ((state[0] - obs.x) / obs.rx) ** 2 + ((state[1] - obs.y) / obs.ry) ** 2 - 1.0
             for obs in obstacles
         ]
         obstacle_margins.append(min(margins))
-    obstacle_margins = np.array(obstacle_margins)
+    return np.array(obstacle_margins)
 
-    ax_constraints.plot(time_control, obstacle_margins, linewidth=2.2, label="min obstacle margin")
-    ax_constraints.plot(time_control, costs, linewidth=2.0, label="stage objective")
-    ax_constraints.axhline(0.0, color="black", linestyle=":", linewidth=1.0, label="active obstacle boundary")
-    ax_constraints.set_title("Constraint Activity and Cost")
-    ax_constraints.set_xlabel("time [s]")
-    ax_constraints.set_ylabel("value")
-    ax_constraints.legend(loc="upper right")
-    ax_constraints.grid(True, alpha=0.25)
 
+def obstacle_patch(ax, obstacle, color="0.45", alpha=0.35, label=None):
+    theta = np.linspace(0.0, 2.0 * np.pi, 180)
+    x_obs = obstacle.x + obstacle.rx * np.cos(theta)
+    y_obs = obstacle.y + obstacle.ry * np.sin(theta)
+    ax.fill(x_obs, y_obs, color=color, alpha=alpha, label=label)
+    ax.plot(x_obs, y_obs, color=color, linewidth=1.0, alpha=0.8)
+
+
+def draw_bicycle(ax, x, y, psi, length=2.8, width=1.25, color="#dc2626", alpha=0.95):
+    half_l = 0.5 * length
+    half_w = 0.5 * width
+    corners = np.array(
+        [
+            [half_l, half_w],
+            [half_l, -half_w],
+            [-half_l, -half_w],
+            [-half_l, half_w],
+        ]
+    )
+    rotation = np.array([[np.cos(psi), -np.sin(psi)], [np.sin(psi), np.cos(psi)]])
+    body = corners @ rotation.T + np.array([x, y])
+    patch = Polygon(body, closed=True, facecolor=color, edgecolor="#7f1d1d", alpha=alpha, linewidth=1.0)
+    ax.add_patch(patch)
+
+    front_center = np.array([0.65 * half_l, 0.0]) @ rotation.T + np.array([x, y])
+    rear_center = np.array([-0.65 * half_l, 0.0]) @ rotation.T + np.array([x, y])
+    front = Circle(front_center, radius=0.16, facecolor="#111827", edgecolor="white", linewidth=0.6, zorder=5)
+    rear = Circle(rear_center, radius=0.16, facecolor="#111827", edgecolor="white", linewidth=0.6, zorder=5)
+    ax.add_patch(front)
+    ax.add_patch(rear)
+    return [patch, front, rear]
+
+
+def format_path_axis(ax, cfg, x_dense, y_dense):
+    ax.plot(x_dense, y_dense, "--", color="tab:blue", linewidth=2.0, label="reference centerline")
+    ax.axhline(cfg.road_half_width, color="black", linestyle=":", linewidth=1.0, label="road boundary")
+    ax.axhline(-cfg.road_half_width, color="black", linestyle=":", linewidth=1.0)
+    ax.fill_between(x_dense, -cfg.road_half_width, cfg.road_half_width, color="#e5e7eb", alpha=0.28)
+    ax.set_xlim(0.0, max(55.0, x_dense[-1]))
+    ax.set_ylim(-5.2, 5.2)
+    ax.set_xlabel("x position [m]")
+    ax.set_ylabel("y position [m]")
+    ax.grid(True, alpha=0.25)
+
+
+def plot_geometry(cfg, result, output_dir):
+    obstacles = result["obstacles"]
+    state_array = result["states"]
+    x_dense = np.linspace(0.0, 55.0, 600)
+    y_dense = reference_lane(x_dense)
+
+    fig, ax = plt.subplots(figsize=(13, 5.4))
+    format_path_axis(ax, cfg, x_dense, y_dense)
+    ax.plot(state_array[:, 0], state_array[:, 1], color="#dc2626", linewidth=2.3, label="closed-loop trajectory")
+    for index, obstacle in enumerate(obstacles, start=1):
+        obstacle_patch(ax, obstacle, label=f"obstacle {index}")
+        ax.annotate(
+            f"O{index}=({obstacle.x:.1f}, {obstacle.y:.1f})\n$r_x$={obstacle.rx:.1f}, $r_y$={obstacle.ry:.1f}",
+            xy=(obstacle.x, obstacle.y),
+            xytext=(obstacle.x - 5.6, obstacle.y + 2.4),
+            arrowprops={"arrowstyle": "->", "color": "#374151", "lw": 1.0},
+            fontsize=9,
+            bbox={"boxstyle": "round,pad=0.25", "fc": "white", "ec": "#d1d5db", "alpha": 0.9},
+        )
+
+    for sample in [8, 18, 30, 40]:
+        if sample < len(state_array):
+            draw_bicycle(ax, state_array[sample, 0], state_array[sample, 1], state_array[sample, 2], alpha=0.42)
+    ax.set_title("Scenario Geometry: Lane, Parameterized Obstacles, and Bicycle States")
+    ax.legend(loc="upper right", ncols=2)
     fig.tight_layout()
-    fig.savefig(output_dir / "mpc_summary.png", dpi=180)
-    fig.savefig(output_dir / "mpc_summary.svg")
+    fig.savefig(output_dir / "mpc-geometry.png", dpi=180)
+    fig.savefig(output_dir / "mpc-geometry.svg")
     plt.close(fig)
 
-    fig2, axes2 = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+
+def plot_results(result, output_dir):
+    cfg = result["cfg"]
+    obstacles = result["obstacles"]
+    state_array = result["states"]
+    control_array = result["controls"]
+    time_state = result["time_state"]
+    time_control = result["time_control"]
+    costs = result["costs"]
+
+    x_dense = np.linspace(0.0, max(55.0, state_array[-1, 0] + 3.0), 500)
+    y_dense = reference_lane(x_dense)
+    v_dense = reference_speed(x_dense)
+
+    fig, axes = plt.subplots(2, 1, figsize=(13, 10), sharex=False, gridspec_kw={"height_ratios": [1.35, 1.0]})
+    ax_path, ax_speed = axes
+
+    format_path_axis(ax_path, cfg, x_dense, y_dense)
+    ax_path.plot(state_array[:, 0], state_array[:, 1], color="tab:red", linewidth=2.6, label="closed-loop trajectory")
+    for index, obstacle in enumerate(obstacles, start=1):
+        obstacle_patch(ax_path, obstacle, label=f"obstacle {index}")
+    ax_path.set_title("Closed-Loop Path and Obstacle Constraints")
+    ax_path.legend(loc="upper right", ncols=2)
+
+    ax_speed.plot(x_dense, v_dense, "--", color="tab:green", linewidth=2.0, label="speed reference along path")
+    ax_speed.plot(state_array[:, 0], state_array[:, 3], color="tab:orange", linewidth=2.6, label="closed-loop speed")
+    ax_speed.axhline(cfg.v_min, color="black", linestyle=":", linewidth=1.0)
+    ax_speed.axhline(cfg.v_max, color="black", linestyle=":", linewidth=1.0)
+    ax_speed.fill_between(x_dense, cfg.v_min, cfg.v_max, color="#dcfce7", alpha=0.25, label="speed limits")
+    ax_speed.set_title("Velocity Profile")
+    ax_speed.set_xlabel("x position [m]")
+    ax_speed.set_ylabel("speed [m/s]")
+    ax_speed.legend(loc="upper right")
+    ax_speed.grid(True, alpha=0.25)
+
+    fig.tight_layout()
+    fig.savefig(output_dir / "mpc-summary.png", dpi=180)
+    fig.savefig(output_dir / "mpc-summary.svg")
+    plt.close(fig)
+
+    fig_inputs, axes_inputs = plt.subplots(3, 1, figsize=(12, 11), sharex=True)
 
     y_ref_over_time = reference_lane(state_array[:, 0])
     v_ref_over_time = reference_speed(state_array[:, 0])
-    axes2[0].plot(time_state, state_array[:, 1], linewidth=2.2, label="y")
-    axes2[0].plot(time_state, y_ref_over_time, "--", linewidth=2.0, label="y reference")
-    axes2[0].axhline(cfg.road_half_width, color="black", linestyle=":", linewidth=1.0)
-    axes2[0].axhline(-cfg.road_half_width, color="black", linestyle=":", linewidth=1.0)
-    axes2[0].set_ylabel("lateral position [m]")
-    axes2[0].legend(loc="upper right")
-    axes2[0].grid(True, alpha=0.25)
+    axes_inputs[0].plot(time_state, state_array[:, 1], linewidth=2.2, label="y")
+    axes_inputs[0].plot(time_state, y_ref_over_time, "--", linewidth=2.0, label="y reference")
+    axes_inputs[0].axhline(cfg.road_half_width, color="black", linestyle=":", linewidth=1.0)
+    axes_inputs[0].axhline(-cfg.road_half_width, color="black", linestyle=":", linewidth=1.0)
+    axes_inputs[0].set_ylabel("lateral position [m]")
+    axes_inputs[0].legend(loc="upper right")
+    axes_inputs[0].grid(True, alpha=0.25)
 
-    axes2[1].plot(time_state, state_array[:, 2], linewidth=2.2, label="heading")
-    axes2[1].plot(time_state, state_array[:, 3], linewidth=2.2, label="speed")
-    axes2[1].plot(time_state, v_ref_over_time, "--", linewidth=2.0, label="speed ref")
-    axes2[1].set_ylabel("heading / speed")
-    axes2[1].legend(loc="upper right")
-    axes2[1].grid(True, alpha=0.25)
+    axes_inputs[1].plot(time_state, state_array[:, 2], linewidth=2.2, label="heading")
+    axes_inputs[1].plot(time_state, state_array[:, 3], linewidth=2.2, label="speed")
+    axes_inputs[1].plot(time_state, v_ref_over_time, "--", linewidth=2.0, label="speed ref")
+    axes_inputs[1].set_ylabel("heading / speed")
+    axes_inputs[1].legend(loc="upper right")
+    axes_inputs[1].grid(True, alpha=0.25)
 
     accel_rate = np.diff(np.concatenate([[0.0], control_array[:, 0]]))
     steer_rate = np.diff(np.concatenate([[0.0], control_array[:, 1]]))
-    axes2[2].step(time_control, accel_rate, where="post", linewidth=2.0, label="delta accel")
-    axes2[2].step(time_control, steer_rate, where="post", linewidth=2.0, label="delta steer")
-    axes2[2].axhline(cfg.jerk_limit, color="tab:blue", linestyle=":", linewidth=1.0)
-    axes2[2].axhline(-cfg.jerk_limit, color="tab:blue", linestyle=":", linewidth=1.0)
-    axes2[2].axhline(cfg.steer_rate_limit, color="tab:orange", linestyle=":", linewidth=1.0)
-    axes2[2].axhline(-cfg.steer_rate_limit, color="tab:orange", linestyle=":", linewidth=1.0)
-    axes2[2].set_ylabel("input increments")
-    axes2[2].set_xlabel("time [s]")
-    axes2[2].legend(loc="upper right")
-    axes2[2].grid(True, alpha=0.25)
+    axes_inputs[2].step(time_control, accel_rate, where="post", linewidth=2.0, label="delta accel")
+    axes_inputs[2].step(time_control, steer_rate, where="post", linewidth=2.0, label="delta steer")
+    axes_inputs[2].axhline(cfg.jerk_limit, color="tab:blue", linestyle=":", linewidth=1.0)
+    axes_inputs[2].axhline(-cfg.jerk_limit, color="tab:blue", linestyle=":", linewidth=1.0)
+    axes_inputs[2].axhline(cfg.steer_rate_limit, color="tab:orange", linestyle=":", linewidth=1.0)
+    axes_inputs[2].axhline(-cfg.steer_rate_limit, color="tab:orange", linestyle=":", linewidth=1.0)
+    axes_inputs[2].set_ylabel("input increments")
+    axes_inputs[2].set_xlabel("time [s]")
+    axes_inputs[2].legend(loc="upper right")
+    axes_inputs[2].grid(True, alpha=0.25)
 
-    fig2.tight_layout()
-    fig2.savefig(output_dir / "mpc_states.png", dpi=180)
-    fig2.savefig(output_dir / "mpc_states.svg")
-    plt.close(fig2)
+    fig_inputs.tight_layout()
+    fig_inputs.savefig(output_dir / "mpc-states.png", dpi=180)
+    fig_inputs.savefig(output_dir / "mpc-states.svg")
+    plt.close(fig_inputs)
+
+
+def animate_closed_loop(result, output_dir):
+    cfg = result["cfg"]
+    obstacles = result["obstacles"]
+    states = result["states"]
+    x_dense = np.linspace(0.0, max(55.0, states[-1, 0] + 3.0), 500)
+    y_dense = reference_lane(x_dense)
+    frame_indices = np.unique(np.linspace(0, len(states) - 1, min(52, len(states)), dtype=int))
+
+    fig, ax = plt.subplots(figsize=(11.5, 5.0))
+
+    def draw_frame(frame_index):
+        ax.clear()
+        format_path_axis(ax, cfg, x_dense, y_dense)
+        for index, obstacle in enumerate(obstacles, start=1):
+            obstacle_patch(ax, obstacle, label=f"obstacle {index}")
+        state_index = frame_indices[frame_index]
+        ax.plot(states[: state_index + 1, 0], states[: state_index + 1, 1], color="#dc2626", linewidth=2.5)
+        draw_bicycle(ax, states[state_index, 0], states[state_index, 1], states[state_index, 2])
+        ax.set_title(f"Animated Closed-Loop Motion, t = {cfg.dt * state_index:.1f} s")
+        ax.legend(loc="upper right", ncols=2)
+
+    anim = animation.FuncAnimation(fig, draw_frame, frames=len(frame_indices), interval=130, repeat=True)
+    anim.save(output_dir / "mpc-animation.gif", writer=animation.PillowWriter(fps=8))
+    plt.close(fig)
+
+
+def plot_scenario_comparison(results, output_dir):
+    colors = ["#2563eb", "#16a34a", "#dc2626", "#9333ea"]
+    labels = [result["scenario"].label for result in results]
+
+    fig_paths, axes_paths = plt.subplots(2, 2, figsize=(13, 9), sharex=True, sharey=True)
+    for ax, result, color in zip(axes_paths.ravel(), results, colors):
+        cfg = result["cfg"]
+        states = result["states"]
+        x_dense = np.linspace(0.0, max(55.0, states[-1, 0] + 3.0), 500)
+        y_dense = reference_lane(x_dense)
+        format_path_axis(ax, cfg, x_dense, y_dense)
+        ax.plot(states[:, 0], states[:, 1], color=color, linewidth=2.4, label="closed-loop trajectory")
+        for index, obstacle in enumerate(result["obstacles"], start=1):
+            obstacle_patch(ax, obstacle, label=f"obstacle {index}")
+        ax.set_title(result["scenario"].label)
+        ax.legend(loc="upper right", fontsize=8)
+    fig_paths.suptitle("Four Obstacle-Position Scenarios", y=0.995)
+    fig_paths.tight_layout()
+    fig_paths.savefig(output_dir / "mpc-scenario-comparison.png", dpi=180)
+    fig_paths.savefig(output_dir / "mpc-scenario-comparison.svg")
+    plt.close(fig_paths)
+
+    fig_controls, axes_controls = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+    for result, color, label in zip(results, colors, labels):
+        controls = result["controls"]
+        time_control = result["time_control"]
+        axes_controls[0].step(time_control, controls[:, 0], where="post", color=color, linewidth=2.0, label=label)
+        axes_controls[1].step(time_control, controls[:, 1], where="post", color=color, linewidth=2.0, label=label)
+    cfg = results[0]["cfg"]
+    axes_controls[0].axhline(cfg.a_min, color="black", linestyle=":", linewidth=1.0)
+    axes_controls[0].axhline(cfg.a_max, color="black", linestyle=":", linewidth=1.0)
+    axes_controls[0].set_ylabel("acceleration [m/s^2]")
+    axes_controls[0].set_title("Acceleration Profiles")
+    axes_controls[0].grid(True, alpha=0.25)
+    axes_controls[0].legend(loc="upper right", fontsize=8)
+    axes_controls[1].axhline(cfg.delta_min, color="black", linestyle=":", linewidth=1.0)
+    axes_controls[1].axhline(cfg.delta_max, color="black", linestyle=":", linewidth=1.0)
+    axes_controls[1].set_ylabel("steering [rad]")
+    axes_controls[1].set_xlabel("time [s]")
+    axes_controls[1].set_title("Steering Profiles")
+    axes_controls[1].grid(True, alpha=0.25)
+    fig_controls.tight_layout()
+    fig_controls.savefig(output_dir / "mpc-control-comparison.png", dpi=180)
+    fig_controls.savefig(output_dir / "mpc-control-comparison.svg")
+    plt.close(fig_controls)
+
+    metrics = pd.DataFrame([scenario_metrics(result) for result in results])
+    fig_metrics, axes_metrics = plt.subplots(1, 3, figsize=(13, 4.4))
+    metric_specs = [
+        ("min_obstacle_margin", "minimum obstacle margin"),
+        ("rms_speed_error_mps", "RMS speed error [m/s]"),
+        ("steer_variation", "total steering variation"),
+    ]
+    x = np.arange(len(metrics))
+    short_labels = [result["scenario"].name.replace("_", "\n") for result in results]
+    for ax, (column, title) in zip(axes_metrics, metric_specs):
+        ax.bar(x, metrics[column], color=colors, alpha=0.86)
+        ax.set_xticks(x, short_labels)
+        ax.set_title(title)
+        ax.grid(True, axis="y", alpha=0.25)
+    fig_metrics.tight_layout()
+    fig_metrics.savefig(output_dir / "mpc-metrics-comparison.png", dpi=180)
+    fig_metrics.savefig(output_dir / "mpc-metrics-comparison.svg")
+    plt.close(fig_metrics)
 
 
 if __name__ == "__main__":

@@ -111,18 +111,23 @@ def reference_speed(x):
     slowdown_2 = 2.8 * np.exp(-((x - 35.0) / 5.0) ** 2)
     return 9.0 - slowdown_1 - slowdown_2
 
-def obstacle_ellipses():
-    return [
-        Obstacle(x=20.0, y=0.0, rx=3.0, ry=1.3),
-        Obstacle(x=36.0, y=2.0, rx=2.8, ry=1.25),
-    ]
+def make_obstacles(
+    first_position=(20.0, 0.0),
+    second_position=(36.0, 2.0),
+    first_radii=(3.0, 1.3),
+    second_radii=(2.8, 1.25),
+):
+    return (
+        Obstacle(x=first_position[0], y=first_position[1], rx=first_radii[0], ry=first_radii[1]),
+        Obstacle(x=second_position[0], y=second_position[1], rx=second_radii[0], ry=second_radii[1]),
+    )
 ```
 
-The reference lane bends twice, and the speed reference decreases near the obstacle-rich regions. This forces the controller to balance path-following against smooth input changes and collision avoidance.
+The two obstacles are now defined through center-position parameters. That makes it easy to rerun the same controller with different obstacle layouts while keeping the model, cost, and constraints unchanged.
 
-![Closed-loop path, speed, inputs, and constraint activity](assets/plots/mpc-summary.svg)
+![Scenario geometry with parameterized obstacles and sampled bicycle states](assets/plots/mpc-geometry.svg)
 
-The top-left panel is the most important geometric picture. The vehicle trajectory bends around the obstacle ellipses while staying within the road corridor. That is the visible consequence of the optimization problem.
+The geometry figure shows the lane, road corridor, two elliptical obstacle regions, and sampled bicycle footprints along the closed-loop trajectory. The vehicle trajectory bends around the obstacle ellipses while staying within the road corridor. That is the visible consequence of the optimization problem.
 
 ## The Prediction Model
 
@@ -247,6 +252,10 @@ This is the conceptual core of MPC. The optimizer computes a whole plan, but the
 
 ## Reading the Results
 
+![Closed-loop path and velocity profile](assets/plots/mpc-summary.svg)
+
+The top panel shows the closed-loop path and obstacle constraints. The bottom panel shows the velocity profile against the position-dependent speed reference. The speed dips near the obstacle-rich parts of the road, which gives the controller more room to satisfy the steering and obstacle constraints smoothly.
+
 ![Closed-loop states and input increments](assets/plots/mpc-states.svg)
 
 The second figure helps interpret the controller behavior:
@@ -265,6 +274,33 @@ From the verified run used for this article:
 
 Those numbers matter because they show the controller is not merely producing a pretty path. It is doing so while staying well inside the actuator limits and maintaining a positive clearance from the obstacle boundaries.
 
+## Animated Closed Loop
+
+![Animated closed-loop vehicle motion](assets/plots/mpc-animation.gif)
+
+The animation uses the same closed-loop states as the static figures. The red bicycle footprint advances one MPC sample at a time, so the avoidance maneuver is easier to read as a receding-horizon response instead of a single finished curve.
+
+## Four Obstacle Layouts
+
+Because the obstacle centers are parameters, the same problem can be repeated with different geometry:
+
+1. Lower then upper obstacles: `O1=(17.0, -1.5)`, `O2=(34.0, 2.3)`.
+2. Middle gate: `O1=(20.0, -1.8)`, `O2=(35.0, 1.8)`.
+3. Late gate: `O1=(23.0, -1.4)`, `O2=(39.0, 1.4)`.
+4. Same-side lower obstacles: `O1=(20.0, -1.6)`, `O2=(36.0, -0.4)`.
+
+![Closed-loop paths for four obstacle-position scenarios](assets/plots/mpc-scenario-comparison.svg)
+
+The different obstacle positions change where the controller starts steering away from the centerline and how aggressively it returns to the reference lane.
+
+![Acceleration and steering profiles for four obstacle-position scenarios](assets/plots/mpc-control-comparison.svg)
+
+The control comparison is the most direct way to see the practical effect of geometry. A tighter or more central obstacle pair usually creates larger steering activity, while offset obstacles can often be handled with a gentler lateral shift.
+
+![Metric comparison for four obstacle-position scenarios](assets/plots/mpc-metrics-comparison.svg)
+
+The metric comparison summarizes three differences: the closest normalized obstacle clearance, speed-tracking error, and total steering variation. Those numbers are also saved in the scenario comparison CSV for further analysis.
+
 ## What This Example Teaches
 
 This example illustrates three practical lessons about MPC:
@@ -281,15 +317,14 @@ The full working source used for this page is bundled with the article:
 
 - [Python controller source](assets/code/mpc_bicycle_constraints.py)
 - [Closed-loop results CSV](assets/code/closed_loop_results.csv)
+- [Scenario comparison metrics CSV](assets/code/scenario_comparison_metrics.csv)
 
-To run the example locally in the original project folder:
+To regenerate the figures from this project folder:
 
 ```bash
-conda activate control
-cd /Users/kirar2004/Documents/Coding/Python/casadi_mpc_constraints
-python mpc_bicycle_constraints.py
+python project/casadi-constrained-mpc/assets/code/mpc_bicycle_constraints.py
 ```
 
-That generates the figures used on this page and saves them under `outputs/`.
+That generates the figures used on this page and saves them under `project/casadi-constrained-mpc/assets/plots/`.
 
 :::
