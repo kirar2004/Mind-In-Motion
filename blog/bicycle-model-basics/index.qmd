@@ -83,9 +83,6 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation, PillowWriter
-from matplotlib.patches import Rectangle
-from matplotlib import transforms
 
 plt.rcParams.update({
     "figure.figsize": (8, 4.8),
@@ -372,54 +369,6 @@ The next animation shows how a constant steering command shapes the path over a 
 Increasing the steering angle tightens the path because it increases curvature and reduces turning radius. The controls expose how steering angle, speed, and duration change the visible arc.
 :::
 
-## Interactive Turning Explorer
-
-Use the sliders to change steering angle, speed, wheelbase, and playback rate. The path is recomputed in the browser using the same kinematic equations.
-
-::: {#fig-interactive-turning-explorer}
-```{=html}
-<div class="bm-widget" id="turning-explorer">
-  <div class="bm-controls">
-    <label>Steering angle δ [deg]
-      <input id="turn-delta" type="range" min="-28" max="28" value="12" step="1">
-      <output id="turn-delta-out"></output>
-    </label>
-    <label>Speed v [m/s]
-      <input id="turn-speed" type="range" min="1" max="12" value="6" step="0.5">
-      <output id="turn-speed-out"></output>
-    </label>
-    <label>Wheelbase L [m]
-      <input id="turn-wheelbase" type="range" min="1.8" max="4.2" value="2.8" step="0.1">
-      <output id="turn-wheelbase-out"></output>
-    </label>
-    <label>Playback rate
-      <input id="turn-rate" type="range" min="0.2" max="2.5" value="1" step="0.1">
-      <output id="turn-rate-out"></output>
-    </label>
-    <label>Simulation time [s]
-      <input id="turn-time" type="number" min="2" max="300" value="16.4" step="0.1">
-    </label>
-    <label class="bm-check">
-      <input id="turn-auto-circle" type="checkbox" checked>
-      Auto one-circle time
-    </label>
-    <label class="bm-check">
-      <input id="turn-preserve" type="checkbox">
-      Preserve path when parameters change
-    </label>
-  </div>
-  <div class="bm-toolbar">
-    <button id="turn-play" type="button">Pause</button>
-    <button id="turn-reset" type="button">Reset</button>
-    <span id="turn-readout"></span>
-  </div>
-  <canvas id="turn-canvas" width="920" height="520" aria-label="Interactive bicycle model turning simulation"></canvas>
-</div>
-```
-
-Interactive turning explorer. The controls can recompute a one-circle trajectory from the current parameters, or preserve the existing path and continue from the current state after parameters change.
-:::
-
 ## A Smooth Steering Maneuver
 
 Path changes usually require steering one way and then steering back. A simple sinusoidal steering input is enough to show the idea.
@@ -451,61 +400,9 @@ plt.show()
 
 This shows a practical modeling point: lateral displacement is delayed relative to steering input. Steering changes heading first; position follows after the vehicle has moved forward.
 
-## Animation: A Vehicle Body Along the Path
+## Interactive Maneuver and Body Explorer
 
-The rectangle below is only a visual aid. The state model still tracks the rear-axle reference point, heading, and speed. Drawing a body on top of the state makes the geometry easier to read.
-
-```{python}
-#| label: make-body-animation
-#| include: false
-body_gif_path = Path("bicycle-body-animation-v3.gif")
-
-if not body_gif_path.exists():
-    dt = 0.1
-    t = np.arange(0.0, 10.0, dt)
-    steer = np.deg2rad(10.0) * np.sin(2.0 * np.pi * t / t[-1])
-    states = simulate_bicycle([0.0, 0.0, 0.0, 7.0], [(0.0, d) for d in steer], dt=dt)
-
-    fig, ax = plt.subplots(figsize=(8, 5.2))
-    ax.plot(states[:, 0], states[:, 1], "--", color="0.65", linewidth=1.4)
-    ax.set_xlim(-8, 56)
-    ax.set_ylim(-4, 44)
-    ax.set_aspect("equal", adjustable="box")
-    ax.set_xlabel("x position [m]")
-    ax.set_ylabel("y position [m]")
-    ax.set_title("Vehicle heading follows the simulated state")
-
-    body_length = 4.5
-    body_width = 1.8
-    body = Rectangle((-body_length * 0.25, -body_width / 2), body_length, body_width,
-                     facecolor="tab:blue", edgecolor="black", alpha=0.75)
-    front = Rectangle((body_length * 0.55, -body_width / 4), 0.35, body_width / 2,
-                      facecolor="tab:red", edgecolor="black", alpha=0.9)
-    ax.add_patch(body)
-    ax.add_patch(front)
-    trace, = ax.plot([], [], color="tab:orange", linewidth=2.2)
-
-    frame_ids = np.linspace(0, len(states) - 1, 55).astype(int)
-
-    def update(frame):
-        idx = frame_ids[frame]
-        px, py, psi, _ = states[idx]
-        transform = transforms.Affine2D().rotate(psi).translate(px, py) + ax.transData
-        body.set_transform(transform)
-        front.set_transform(transform)
-        trace.set_data(states[:idx + 1, 0], states[:idx + 1, 1])
-        return body, front, trace
-
-    animation = FuncAnimation(fig, update, frames=len(frame_ids), interval=140, blit=True)
-    animation.save(body_gif_path, writer=PillowWriter(fps=8))
-    plt.close(fig)
-```
-
-![A vehicle body drawn on the simulated rear-axle path shows how heading evolves along the trajectory.](bicycle-body-animation-v3.gif){#fig-vehicle-body-animation}
-
-## Interactive Maneuver Explorer
-
-This version lets you alter the steering waveform. Increasing the steering amplitude increases curvature; increasing the maneuver duration spreads the same left-right steering pattern over a longer time.
+The rectangle below is a visual aid drawn from the same simulated state. The model tracks the rear-axle reference point, heading, and speed; the body overlay makes the heading evolution easier to read. Increasing the steering amplitude increases curvature, while increasing the maneuver duration spreads the same left-right steering pattern over a longer time.
 
 ::: {#fig-interactive-maneuver-explorer}
 ```{=html}
@@ -537,7 +434,7 @@ This version lets you alter the steering waveform. Increasing the steering ampli
 </div>
 ```
 
-Interactive maneuver explorer. The controls show how steering amplitude, maneuver duration, speed, and playback rate alter a smooth left-right steering maneuver.
+Interactive maneuver and body explorer. The controls show how steering amplitude, maneuver duration, speed, and playback rate alter a smooth left-right steering maneuver, while the vehicle body shows the heading state along the path.
 :::
 
 ## Speed Matters
@@ -839,12 +736,6 @@ figcaption.quarto-float-caption,
     update();
   }
 
-  function oneCircleTime(speed, delta, wheelbase) {
-    const curvature = Math.tan(delta) / wheelbase;
-    if (Math.abs(curvature) < 1e-5 || speed <= 0) return 20;
-    return Math.min(300, Math.max(2, 2 * Math.PI / (Math.abs(curvature) * speed)));
-  }
-
   function constantSteeringPath(initialState, delta, speed, wheelbase, dt, horizon) {
     const steps = Math.max(2, Math.round(horizon / dt));
     const start = initialState.slice();
@@ -909,126 +800,6 @@ figcaption.quarto-float-caption,
 
     [delta, speed, duration].forEach(input => input.addEventListener("input", () => recompute(true)));
     recompute();
-    tick();
-  }
-
-  function setupTurningExplorer() {
-    const canvas = document.getElementById("turn-canvas");
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    const delta = document.getElementById("turn-delta");
-    const speed = document.getElementById("turn-speed");
-    const wheelbase = document.getElementById("turn-wheelbase");
-    const rate = document.getElementById("turn-rate");
-    const simTime = document.getElementById("turn-time");
-    const autoCircle = document.getElementById("turn-auto-circle");
-    const preserve = document.getElementById("turn-preserve");
-    const play = document.getElementById("turn-play");
-    const reset = document.getElementById("turn-reset");
-    const readout = document.getElementById("turn-readout");
-    bindOutput(delta, document.getElementById("turn-delta-out"), " deg", 0);
-    bindOutput(speed, document.getElementById("turn-speed-out"), " m/s", 1);
-    bindOutput(wheelbase, document.getElementById("turn-wheelbase-out"), " m", 1);
-    bindOutput(rate, document.getElementById("turn-rate-out"), "x", 1);
-
-    let playing = true;
-    let states = [[0, 0, 0, Number(speed.value)]];
-    let elapsed = 0;
-    let bounds = null;
-    let dt = 0.06;
-    let guide = [];
-
-    function currentParams() {
-      return {
-        delta: degToRad(Number(delta.value)),
-        speed: Number(speed.value),
-        wheelbase: Number(wheelbase.value),
-        horizon: Number(simTime.value)
-      };
-    }
-
-    function refreshCircleTime() {
-      if (!autoCircle.checked) return;
-      const p = currentParams();
-      simTime.value = oneCircleTime(p.speed, p.delta, p.wheelbase).toFixed(1);
-    }
-
-    function updateGuide() {
-      const p = currentParams();
-      const start = states[states.length - 1] || [0, 0, 0, p.speed];
-      guide = constantSteeringPath(start, p.delta, p.speed, p.wheelbase, dt, Math.max(0.5, p.horizon - elapsed));
-      bounds = boundsFor([states, guide], 8);
-    }
-
-    function resetSimulation() {
-      refreshCircleTime();
-      const p = currentParams();
-      states = [[0, 0, 0, p.speed]];
-      elapsed = 0;
-      updateGuide();
-      draw();
-    }
-
-    function draw() {
-      const map = makeMapper(canvas, bounds);
-      drawGrid(ctx, canvas, bounds, map);
-      if (guide.length > 1) drawPath(ctx, map, guide, guide.length - 1, "#cbd5e1", 2);
-      drawPath(ctx, map, states, states.length - 1, "#f97316", 3);
-      drawVehicle(ctx, map, states[states.length - 1]);
-      const current = states[states.length - 1];
-      const p = currentParams();
-      const radius = Math.abs(p.wheelbase / Math.tan(p.delta));
-      readout.textContent = `t = ${elapsed.toFixed(1)} / ${p.horizon.toFixed(1)} s, psi = ${(current[2] * 180 / Math.PI).toFixed(1)} deg, R = ${Number.isFinite(radius) ? radius.toFixed(1) : "infinite"} m`;
-    }
-
-    function tick() {
-      if (playing && elapsed < Number(simTime.value)) {
-        const substeps = Math.max(1, Math.round(Number(rate.value)));
-        for (let i = 0; i < substeps && elapsed < Number(simTime.value); i += 1) {
-          const p = currentParams();
-          const state = states[states.length - 1].slice();
-          state[3] = p.speed;
-          states.push(rk4Step(state, [0, p.delta], dt, p.wheelbase));
-          elapsed += dt;
-        }
-        updateGuide();
-        draw();
-      }
-      window.requestAnimationFrame(tick);
-    }
-
-    function parametersChanged() {
-      if (preserve.checked) {
-        refreshCircleTime();
-        updateGuide();
-        draw();
-      } else {
-        resetSimulation();
-      }
-    }
-
-    [delta, speed, wheelbase].forEach(input => input.addEventListener("input", parametersChanged));
-    autoCircle.addEventListener("change", parametersChanged);
-    preserve.addEventListener("change", () => {
-      updateGuide();
-      draw();
-    });
-    simTime.addEventListener("input", () => {
-      autoCircle.checked = false;
-      updateGuide();
-      draw();
-    });
-    rate.addEventListener("input", draw);
-    play.addEventListener("click", () => {
-      playing = !playing;
-      play.textContent = playing ? "Pause" : "Play";
-    });
-    reset.addEventListener("click", () => {
-      playing = true;
-      play.textContent = "Pause";
-      resetSimulation();
-    });
-    resetSimulation();
     tick();
   }
 
@@ -1103,7 +874,6 @@ figcaption.quarto-float-caption,
 
   document.addEventListener("DOMContentLoaded", () => {
     setupRadiusSweep();
-    setupTurningExplorer();
     setupManeuverExplorer();
   });
 })();
