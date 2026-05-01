@@ -1,6 +1,6 @@
 ---
 title: "Bicycle Model from First Principles"
-description: "A standalone introduction to the kinematic bicycle model for car-like motion, with equations, Python code, animations, and applications."
+description: "Geometry, equations, and simulation for the kinematic bicycle model."
 summary: "How steering angle, wheelbase, speed, and acceleration create the path of a car-like vehicle."
 date: "2026-05-01"
 slug: bicycle-model-basics
@@ -30,7 +30,7 @@ For many path-planning and path-tracking questions, a car-like vehicle can be si
 
 That simplified vehicle is called the **bicycle model**. It is not meant to describe every detail of tire physics. It is a compact geometric model that answers a specific question:
 
-> If a vehicle moves forward with speed `v` and front steering angle `delta`, how does its position and heading change?
+> If a vehicle moves forward with speed $v$ and front steering angle $\delta$, how does its position and heading change?
 
 This model is useful whenever the main interest is the vehicle path rather than suspension motion, tire deformation, or load transfer.
 
@@ -51,21 +51,23 @@ The model has four states, two inputs, and one important geometric parameter.
 
 | Symbol | Meaning | Typical unit |
 |---|---|---|
-| `p_x` | longitudinal position in the world frame | m |
-| `p_y` | lateral position in the world frame | m |
-| `psi` | vehicle heading angle | rad |
-| `v` | forward speed | m/s |
-| `a` | longitudinal acceleration input | m/s^2 |
-| `delta` | front steering angle input | rad |
-| `L` | wheelbase | m |
+| $p_x$ | longitudinal position in the world frame | m |
+| $p_y$ | lateral position in the world frame | m |
+| $\psi$ | vehicle heading angle | rad |
+| $v$ | forward speed | m/s |
+| $a$ | longitudinal acceleration input | m/s^2 |
+| $\delta$ | front steering angle input | rad |
+| $L$ | wheelbase | m |
 
-The sign convention used here is standard for a planar vehicle model: positive `psi` rotates counterclockwise, and positive `delta` turns the front wheel to the left.
+: Bicycle model state, input, and parameter notation. {#tbl-quick-reference}
 
-The state is written in the **world frame**, while `v` and `delta` are easiest to interpret in the **vehicle frame**. The equations below are the mapping between those two viewpoints.
+The sign convention used here is standard for a planar vehicle model: positive $\psi$ rotates counterclockwise, and positive $\delta$ turns the front wheel to the left.
+
+The state is written in the **world frame**, while $v$ and $\delta$ are easiest to interpret in the **vehicle frame**. The equations below are the mapping between those two viewpoints.
 
 ## From Position to Velocity
 
-Start with a point moving in a plane. Its position is `(p_x, p_y)`, its heading is `psi`, and its forward speed is `v`.
+Start with a point moving in a plane. Its position is $(p_x, p_y)$, its heading is $\psi$, and its forward speed is $v$.
 
 If the heading is zero, the point moves along the positive `x` direction. If the heading is positive, part of the velocity points in the lateral `y` direction.
 
@@ -123,7 +125,7 @@ The point-mass equations explain translation, but they do not explain how the he
 
 ## Steering Creates Curvature
 
-Let `L` be the wheelbase and `delta` be the front steering angle.
+Let $L$ be the wheelbase and $\delta$ be the front steering angle.
 
 The kinematic bicycle model is built from a no-slip rolling assumption: the rear wheel rolls in the direction of the vehicle body, and the front wheel rolls in the direction it is steered. Under that assumption, the rear-axle reference point follows an arc whose curvature is
 
@@ -190,20 +192,20 @@ ax.set_ylim(-1.5, R + 1.0)
 ax.set_xlabel("x [m]")
 ax.set_ylabel("y [m]")
 ax.set_title("Bicycle-model steering geometry")
-ax.legend(loc="upper right")
+ax.legend(loc="lower right", frameon=True)
 plt.show()
 ```
 
-```{python}
-#| label: radius-table
-L = 2.8
-for deg in [5, 10, 20, 30]:
-    delta = np.deg2rad(deg)
-    radius = L / np.tan(delta)
-    print(f"steering {deg:>2} deg -> turning radius {radius:5.1f} m")
-```
+| Steering angle $\delta$ | Turning radius $R = L/\tan(\delta)$ for $L = 2.8\,\mathrm{m}$ |
+|---:|---:|
+| $5^\circ$ | $32.0\,\mathrm{m}$ |
+| $10^\circ$ | $15.9\,\mathrm{m}$ |
+| $20^\circ$ | $7.7\,\mathrm{m}$ |
+| $30^\circ$ | $4.8\,\mathrm{m}$ |
 
-The table is also a useful scale check. For a passenger-car wheelbase around `2.8 m`, a steering angle of `5 deg` gives a broad curve, while `30 deg` gives a tight low-speed maneuver.
+: Turning radius implied by several steering angles for a representative passenger-car wheelbase. {#tbl-turning-radius-scale}
+
+The table is also a useful scale check. For a passenger-car wheelbase around $2.8\,\mathrm{m}$, a steering angle of $5^\circ$ gives a broad curve, while $30^\circ$ gives a tight low-speed maneuver.
 
 ## The Four-State Model
 
@@ -225,7 +227,7 @@ a & \delta
 \end{bmatrix}^{\top},
 $$
 
-where `a` is longitudinal acceleration and `delta` is front steering angle.
+where $a$ is longitudinal acceleration and $\delta$ is front steering angle.
 
 Putting translation, steering geometry, and acceleration together gives
 
@@ -242,7 +244,7 @@ $$
 \dot{x} = f(x, u).
 $$
 
-It is nonlinear because of the trigonometric terms `cos(psi)`, `sin(psi)`, and `tan(delta)`. That nonlinearity is not decorative; it is the mathematical expression of vehicle geometry.
+It is nonlinear because of the trigonometric terms $\cos(\psi)$, $\sin(\psi)$, and $\tan(\delta)$. These terms encode the geometry of planar vehicle motion.
 
 In Python, the model is just a short function:
 
@@ -276,11 +278,11 @@ def simulate_bicycle(initial_state, controls, dt=0.1, wheelbase=2.8):
     return np.array(states)
 ```
 
-The code uses RK4 integration rather than a first-order Euler step. Euler is easier to write, but it accumulates visible error when the step size is large or the vehicle turns sharply. RK4 is still simple, and it gives a cleaner simulation for tutorial-scale examples.
+The examples use fourth-order Runge-Kutta integration rather than a forward Euler step. For the same step size, RK4 reduces integration error in curved trajectories and avoids numerical artifacts that can obscure the geometry.
 
 ## Sanity Check: Constant Steering
 
-Before trusting any simulation, check a case with a known analytical structure. If `v` and `delta` are constant, the heading rate is constant:
+Before using the simulator for richer maneuvers, check a case with a known analytical structure. If $v$ and $\delta$ are constant, the heading rate is constant:
 
 $$
 \dot{\psi} = \frac{v\tan(\delta)}{L}.
@@ -309,7 +311,7 @@ print(f"simulated heading change: {simulated_heading:.4f} rad")
 print(f"absolute error:           {abs(predicted_heading - simulated_heading):.2e} rad")
 ```
 
-This type of check is small, but it is good modeling hygiene. It verifies that the numerical implementation agrees with the equation in a controlled situation before we use the same code for richer maneuvers.
+This check verifies that the numerical implementation agrees with the equation before the same code is used for richer maneuvers.
 
 ## Constant Steering
 
@@ -340,12 +342,24 @@ The larger the steering angle, the smaller the turning radius. A longer wheelbas
 
 ## Animation: Steering Angle Changes the Radius
 
-The next animation sweeps steering from `0` to `25` degrees. The vehicle starts from the same state each time. As the steering angle increases, the curve tightens.
+The next animation shows how a constant steering command shapes the path over a chosen time horizon. Change the steering angle, speed, and duration to compare the resulting arcs.
 
 ::: {#fig-turning-radius-animation}
 ```{=html}
 <div class="bm-widget" id="radius-sweep">
-  <div class="bm-controls bm-controls-compact">
+  <div class="bm-controls">
+    <label>Steering angle δ [deg]
+      <input id="sweep-delta" type="range" min="0" max="35" value="18" step="1">
+      <output id="sweep-delta-out"></output>
+    </label>
+    <label>Speed v [m/s]
+      <input id="sweep-speed" type="range" min="1" max="12" value="6" step="0.5">
+      <output id="sweep-speed-out"></output>
+    </label>
+    <label>Duration [s]
+      <input id="sweep-duration" type="range" min="2" max="24" value="9" step="0.5">
+      <output id="sweep-duration-out"></output>
+    </label>
     <label>Sweep playback rate
       <input id="sweep-rate" type="range" min="0.2" max="3" value="1" step="0.1">
       <output id="sweep-rate-out"></output>
@@ -355,7 +369,7 @@ The next animation sweeps steering from `0` to `25` degrees. The vehicle starts 
 </div>
 ```
 
-Increasing the steering angle tightens the path because it increases curvature and reduces turning radius. The horizontal axis is intentionally extended to `-30 m` so the full sweep remains visible.
+Increasing the steering angle tightens the path because it increases curvature and reduces turning radius. The controls expose how steering angle, speed, and duration change the visible arc.
 :::
 
 ## Interactive Turning Explorer
@@ -572,7 +586,7 @@ The kinematic bicycle model is commonly used in:
 
 - path tracking for car-like robots,
 - parking and low-speed maneuvering studies,
-- autonomous driving tutorials,
+- autonomous driving course material,
 - lane-change and obstacle-avoidance simulations,
 - motion planning for mobile robots,
 - controller prototyping before moving to richer vehicle dynamics,
@@ -606,7 +620,7 @@ That extra detail is not automatically better. It is better only when the task n
 Three mistakes show up often when first using this model:
 
 1. Treating steering as lateral velocity. Steering changes curvature, not lateral position directly.
-2. Forgetting units. The trigonometric functions expect `psi` and `delta` in radians.
+2. Forgetting units. The trigonometric functions expect $\psi$ and $\delta$ in radians.
 3. Using too large a time step. A coarse step can make the path look plausible while the numerical state is noticeably wrong.
 
 For simple experiments, start with `dt = 0.05` to `0.1` seconds and check whether reducing `dt` changes the path meaningfully.
@@ -686,6 +700,11 @@ This page explains the bicycle model as a standalone vehicle model. I also use t
   display: block;
   border-radius: 6px;
   background: #ffffff;
+}
+.quarto-float-caption,
+figcaption.quarto-float-caption,
+.quarto-float .quarto-float-caption {
+  text-align: left;
 }
 </style>
 
@@ -837,36 +856,59 @@ This page explains the bicycle model as a standalone vehicle model. I also use t
     const canvas = document.getElementById("sweep-canvas");
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
+    const delta = document.getElementById("sweep-delta");
+    const speed = document.getElementById("sweep-speed");
+    const duration = document.getElementById("sweep-duration");
     const rate = document.getElementById("sweep-rate");
+    bindOutput(delta, document.getElementById("sweep-delta-out"), " deg", 0);
+    bindOutput(speed, document.getElementById("sweep-speed-out"), " m/s", 1);
+    bindOutput(duration, document.getElementById("sweep-duration-out"), " s", 1);
     bindOutput(rate, document.getElementById("sweep-rate-out"), "x", 1);
 
     const dt = 0.1;
-    const steeringDeg = Array.from({ length: 51 }, (_, i) => 25 * i / 50);
-    const paths = steeringDeg.map(deg => constantSteeringPath([0, 0, 0, 6], degToRad(deg), 6, 2.8, dt, 9));
-    const bounds = { minX: -30, maxX: 72, minY: -4, maxY: 42 };
     let frame = 0;
+    let states = [];
+    let bounds = null;
+
+    function recompute(resetFrame = true) {
+      states = constantSteeringPath(
+        [0, 0, 0, Number(speed.value)],
+        degToRad(Number(delta.value)),
+        Number(speed.value),
+        2.8,
+        dt,
+        Number(duration.value)
+      );
+      bounds = boundsFor([states], 8);
+      bounds.minX = Math.min(bounds.minX, -30);
+      bounds.maxX = Math.max(bounds.maxX, 40);
+      if (resetFrame) frame = 0;
+      draw();
+    }
 
     function draw() {
-      const index = Math.floor(frame) % paths.length;
-      const states = paths[index];
+      const index = Math.min(Math.floor(frame), states.length - 1);
       const map = makeMapper(canvas, bounds);
       drawGrid(ctx, canvas, bounds, map);
-      drawPath(ctx, map, states, states.length - 1, "#2563eb", 3);
-      drawVehicle(ctx, map, states[states.length - 1]);
+      drawPath(ctx, map, states, states.length - 1, "#cbd5e1", 2);
+      drawPath(ctx, map, states, index, "#2563eb", 3);
+      drawVehicle(ctx, map, states[index]);
       ctx.fillStyle = "#111827";
       ctx.font = "18px system-ui, -apple-system, Segoe UI, sans-serif";
-      ctx.fillText(`steering = ${steeringDeg[index].toFixed(1)} deg`, 58, 70);
+      ctx.fillText(`steering = ${Number(delta.value).toFixed(1)} deg`, 58, 70);
       ctx.font = "14px system-ui, -apple-system, Segoe UI, sans-serif";
-      ctx.fillText("x axis spans -30 m to 72 m", 58, 94);
+      ctx.fillText(`t = ${(index * dt).toFixed(1)} s, v = ${Number(speed.value).toFixed(1)} m/s`, 58, 94);
     }
 
     function tick() {
-      frame = (frame + 0.08 * Number(rate.value)) % paths.length;
+      frame = (frame + Math.max(1, Math.round(Number(rate.value))));
+      if (frame >= states.length) frame = 0;
       draw();
       window.requestAnimationFrame(tick);
     }
 
-    draw();
+    [delta, speed, duration].forEach(input => input.addEventListener("input", () => recompute(true)));
+    recompute();
     tick();
   }
 
