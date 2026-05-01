@@ -131,7 +131,7 @@ The geometry figure shows the lane, road corridor, two elliptical obstacle regio
 
 ## The Prediction Model
 
-The controller uses a **kinematic bicycle model**, a common reduced-order model for path tracking:
+The controller uses a **kinematic bicycle model**, a common reduced-order model for path tracking. If you want the model from first principles before reading the controller details, start with the standalone explanation here: [Bicycle Model from First Principles](../../blog/bicycle-model-basics/).
 
 $$
 \dot{p}_x = v\cos(\psi), \qquad
