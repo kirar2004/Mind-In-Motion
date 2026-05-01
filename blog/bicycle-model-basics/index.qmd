@@ -1,0 +1,357 @@
+---
+title: "Bicycle Model from First Principles"
+description: "A beginner-friendly explanation of the kinematic bicycle model behind the constrained MPC example, with Python simulations."
+summary: "From point-mass motion to the four-state kinematic bicycle model used in MPC."
+date: "2026-05-01"
+slug: bicycle-model-basics
+categories:
+  - Control
+  - Model Predictive Control
+  - Vehicle Modeling
+  - Python
+format:
+  html:
+    toc: true
+    code-copy: true
+    code-overflow: wrap
+execute:
+  warning: false
+  message: false
+---
+
+## Why a Bicycle Model?
+
+The constrained MPC example uses a **kinematic bicycle model**. The word "bicycle" does not mean the vehicle has two wheels. It means the left and right wheels on each axle are collapsed into one front wheel and one rear wheel.
+
+That gives a small model that still captures the important geometry of path tracking:
+
+- the vehicle has a position,
+- it points in a heading direction,
+- it moves forward with speed,
+- steering changes the heading gradually rather than instantly.
+
+This is the right level of model when the main question is **where the vehicle goes**, not how tire forces, suspension, or load transfer behave.
+
+## Start with a Point Mass
+
+If a point moves with speed `v` and heading `psi`, its velocity components are
+
+$$
+\dot p_x = v\cos(\psi), \qquad
+\dot p_y = v\sin(\psi).
+$$
+
+That already explains two state equations. A heading of zero means the vehicle moves along the positive `x` direction. A positive heading gives a positive lateral velocity.
+
+```{python}
+#| label: setup
+#| include: false
+import numpy as np
+import matplotlib.pyplot as plt
+
+plt.rcParams.update({
+    "figure.figsize": (8, 4.8),
+    "axes.grid": True,
+    "grid.alpha": 0.25,
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+})
+```
+
+```{python}
+#| label: point-mass-headings
+headings = np.deg2rad([0, 15, 30, 45])
+speed = 5.0
+dt = 0.1
+steps = 80
+
+fig, ax = plt.subplots()
+for psi in headings:
+    x = [0.0]
+    y = [0.0]
+    for _ in range(steps):
+        x.append(x[-1] + dt * speed * np.cos(psi))
+        y.append(y[-1] + dt * speed * np.sin(psi))
+    ax.plot(x, y, label=f"heading = {np.rad2deg(psi):.0f} deg")
+
+ax.set_aspect("equal", adjustable="box")
+ax.set_xlabel("x position [m]")
+ax.set_ylabel("y position [m]")
+ax.set_title("Point-mass motion with fixed heading")
+ax.legend()
+plt.show()
+```
+
+The missing part is heading dynamics. A point mass can be assigned any heading we want. A car-like vehicle cannot. It turns because the front wheel angle creates curvature.
+
+## Add the Geometry of Steering
+
+Let `L` be the wheelbase and `delta` be the front steering angle. For slow and moderate-speed path-tracking problems, the no-slip geometry gives
+
+$$
+\dot \psi = \frac{v\tan(\delta)}{L}.
+$$
+
+The quantity
+
+$$
+\kappa = \frac{\tan(\delta)}{L}
+$$
+
+is the path curvature. Small steering means small curvature. A longer wheelbase means less curvature for the same steering angle.
+
+The turning radius is
+
+$$
+R = \frac{1}{\kappa} = \frac{L}{\tan(\delta)}.
+$$
+
+So if `delta = 0`, the radius is infinite and the vehicle goes straight.
+
+```{python}
+#| label: radius-table
+L = 2.8
+for deg in [5, 10, 20, 30]:
+    delta = np.deg2rad(deg)
+    radius = L / np.tan(delta)
+    print(f"steering {deg:>2} deg -> turning radius {radius:5.1f} m")
+```
+
+## The Four-State Model Used in the MPC Page
+
+The MPC page uses the state
+
+$$
+x = \begin{bmatrix} p_x & p_y & \psi & v \end{bmatrix}^\top
+$$
+
+and the input
+
+$$
+u = \begin{bmatrix} a & \delta \end{bmatrix}^\top.
+$$
+
+The full continuous-time model is
+
+$$
+\dot{p}_x = v\cos(\psi), \qquad
+\dot{p}_y = v\sin(\psi), \qquad
+\dot{\psi} = \frac{v\tan(\delta)}{L}, \qquad
+\dot{v} = a.
+$$
+
+Here `a` controls speed and `delta` controls curvature. The MPC optimizer chooses both while respecting bounds:
+
+- acceleration is bounded because motors and brakes are finite,
+- steering is bounded because the steering mechanism has a maximum angle,
+- changes in acceleration and steering are bounded to avoid unrealistic, jerky commands.
+
+## Simulating the Model in Python
+
+The simulation below uses the same structure as the MPC implementation: a continuous model plus a fourth-order Runge-Kutta step.
+
+```{python}
+#| label: bicycle-functions
+def bicycle_derivative(state, control, wheelbase=2.8):
+    px, py, psi, v = state
+    a, delta = control
+    return np.array([
+        v * np.cos(psi),
+        v * np.sin(psi),
+        v * np.tan(delta) / wheelbase,
+        a,
+    ])
+
+
+def rk4_step(state, control, dt=0.1, wheelbase=2.8):
+    k1 = bicycle_derivative(state, control, wheelbase)
+    k2 = bicycle_derivative(state + 0.5 * dt * k1, control, wheelbase)
+    k3 = bicycle_derivative(state + 0.5 * dt * k2, control, wheelbase)
+    k4 = bicycle_derivative(state + dt * k3, control, wheelbase)
+    return state + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+
+
+def simulate_bicycle(initial_state, controls, dt=0.1, wheelbase=2.8):
+    states = [np.array(initial_state, dtype=float)]
+    state = states[0].copy()
+    for control in controls:
+        state = rk4_step(state, np.array(control, dtype=float), dt, wheelbase)
+        states.append(state.copy())
+    return np.array(states)
+```
+
+### Constant Steering Produces an Arc
+
+With constant speed and constant steering, the vehicle follows a circular arc.
+
+```{python}
+#| label: constant-steering
+dt = 0.1
+steps = 180
+initial_state = np.array([0.0, 0.0, 0.0, 6.0])
+
+fig, ax = plt.subplots()
+for steer_deg in [0, 5, 10, 20]:
+    controls = [(0.0, np.deg2rad(steer_deg)) for _ in range(steps)]
+    states = simulate_bicycle(initial_state, controls, dt=dt)
+    ax.plot(states[:, 0], states[:, 1], label=f"delta = {steer_deg} deg")
+
+ax.set_aspect("equal", adjustable="box")
+ax.set_xlabel("x position [m]")
+ax.set_ylabel("y position [m]")
+ax.set_title("Kinematic bicycle response to constant steering")
+ax.legend()
+plt.show()
+```
+
+This is the first important intuition: steering does not directly command lateral position. Steering commands curvature. Lateral position changes only after heading changes.
+
+## A Lane-Change-Like Steering Command
+
+In path tracking, the vehicle often needs a positive steering command followed by a negative one. The first part builds lateral motion; the second part straightens the vehicle.
+
+```{python}
+#| label: lane-change-command
+dt = 0.1
+t = np.arange(0.0, 10.0, dt)
+steer = np.deg2rad(10.0) * np.sin(2.0 * np.pi * t / t[-1])
+controls = [(0.0, d) for d in steer]
+states = simulate_bicycle([0.0, 0.0, 0.0, 7.0], controls, dt=dt)
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4.2))
+axes[0].plot(states[:, 0], states[:, 1], color="tab:blue")
+axes[0].set_aspect("equal", adjustable="box")
+axes[0].set_xlabel("x position [m]")
+axes[0].set_ylabel("y position [m]")
+axes[0].set_title("Resulting path")
+
+axes[1].plot(t, np.rad2deg(steer), color="tab:orange")
+axes[1].set_xlabel("time [s]")
+axes[1].set_ylabel("steering [deg]")
+axes[1].set_title("Steering command")
+
+fig.tight_layout()
+plt.show()
+```
+
+This is why MPC is useful. The optimizer can see that a steering action now will affect lateral position later. It does not just react to the current lateral error.
+
+## Speed Couples into Turning
+
+The heading rate is proportional to speed:
+
+$$
+\dot \psi = v\kappa.
+$$
+
+For the same steering angle, a faster vehicle rotates its heading faster in time. This does not change the geometric radius, but it changes how quickly the vehicle sweeps around that radius.
+
+```{python}
+#| label: speed-coupling
+dt = 0.1
+steps = 100
+delta = np.deg2rad(12.0)
+
+fig, ax = plt.subplots()
+for speed in [3.0, 6.0, 9.0]:
+    states = simulate_bicycle([0.0, 0.0, 0.0, speed], [(0.0, delta)] * steps, dt=dt)
+    ax.plot(states[:, 0], states[:, 1], label=f"v = {speed:.0f} m/s")
+
+ax.set_aspect("equal", adjustable="box")
+ax.set_xlabel("x position [m]")
+ax.set_ylabel("y position [m]")
+ax.set_title("Same steering angle, different speeds, same time horizon")
+ax.legend()
+plt.show()
+```
+
+In an MPC problem, this coupling means speed planning and steering planning should not be separated too casually. Slowing down near obstacles can make steering constraints easier to satisfy.
+
+## Why the MPC Model Uses Constraints
+
+The earlier MPC page wraps this model in an optimization problem. The model predicts motion; the constraints define what is allowed.
+
+The main constraints are:
+
+$$
+v_{\min} \le v \le v_{\max},
+$$
+
+$$
+a_{\min} \le a \le a_{\max},
+$$
+
+$$
+\delta_{\min} \le \delta \le \delta_{\max},
+$$
+
+and road boundaries such as
+
+$$
+-w_{\text{road}} \le p_y \le w_{\text{road}}.
+$$
+
+Obstacles are represented as ellipses. For an obstacle centered at `(x_o, y_o)` with radii `r_x` and `r_y`, the vehicle should stay outside
+
+$$
+\left(\frac{p_x - x_o}{r_x}\right)^2
++
+\left(\frac{p_y - y_o}{r_y}\right)^2
+\ge 1.
+$$
+
+That inequality is simple, smooth, and useful for nonlinear optimization.
+
+```{python}
+#| label: obstacle-ellipse
+theta = np.linspace(0, 2 * np.pi, 300)
+xo, yo = 20.0, 0.0
+rx, ry = 3.0, 1.3
+
+fig, ax = plt.subplots(figsize=(7, 4))
+ax.fill(xo + rx * np.cos(theta), yo + ry * np.sin(theta), alpha=0.35, color="tab:gray", label="forbidden ellipse")
+ax.plot([14, 26], [0, 0], "--", color="tab:blue", label="road centerline")
+ax.axhline(4.0, color="black", linestyle=":", linewidth=1)
+ax.axhline(-4.0, color="black", linestyle=":", linewidth=1)
+ax.set_aspect("equal", adjustable="box")
+ax.set_xlabel("x position [m]")
+ax.set_ylabel("y position [m]")
+ax.set_title("Obstacle inequality used by the MPC")
+ax.legend()
+plt.show()
+```
+
+## What This Model Assumes
+
+The kinematic bicycle model assumes:
+
+- no tire slip,
+- a flat road,
+- steering angle is the front wheel angle,
+- vehicle speed is the speed along the body heading,
+- dynamics such as mass, tire force, load transfer, and actuator lag are not modeled.
+
+These assumptions are acceptable for a learning MPC example because they keep the state small and make the optimization easier to understand.
+
+They are not enough for aggressive driving, low-friction roads, or high-speed limit handling. In those cases, a dynamic bicycle model with lateral velocity, yaw rate, tire stiffness, and force limits is more appropriate.
+
+## How This Connects to the Published MPC Example
+
+The [published constrained MPC page](../../project/casadi-constrained-mpc/) uses exactly this prediction model:
+
+```python
+return ca.vertcat(
+    v * ca.cos(psi),
+    v * ca.sin(psi),
+    v * ca.tan(delta) / self.cfg.wheelbase,
+    a,
+)
+```
+
+The optimizer then chooses a sequence of future `a` and `delta` values. It applies only the first pair, measures the new state, and solves again. That repeated prediction-and-correction loop is what turns the bicycle model into an MPC controller.
+
+The key takeaway is:
+
+> The bicycle model is not the controller. It is the prediction engine inside the controller.
+
+Once that distinction is clear, the rest of MPC becomes easier to read: the model predicts, the cost expresses preferences, the constraints express limits, and the optimizer chooses the best feasible next move.
