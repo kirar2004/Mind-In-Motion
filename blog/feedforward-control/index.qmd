@@ -1,0 +1,645 @@
+---
+title: "Feedforward Control"
+description: "Model-based anticipation for tracking references and rejecting known disturbances."
+summary: "A detailed learning note on feedforward control, inverse dynamics, feedforward versus feedback, and simulation examples."
+date: "2026-05-23"
+slug: feedforward-control
+categories:
+  - Control
+  - Feedforward
+  - Simulation
+  - Python
+format:
+  html:
+    toc: true
+    code-copy: true
+    code-overflow: wrap
+execute:
+  warning: false
+  message: false
+---
+
+## The Core Idea
+
+Feedforward control is the part of a controller that acts from a plan, a model, or a measured disturbance before a tracking error has to appear.
+
+Suppose the goal is to make an output $y(t)$ follow a reference $r(t)$. A feedback controller asks:
+
+$$
+\text{given the current error } e(t) = r(t) - y(t), \text{ what correction should be applied?}
+$$
+
+A feedforward controller asks a different question:
+
+$$
+\text{given the desired motion and the model, what input should produce that motion?}
+$$
+
+That second question is the defining idea. Feedforward is model-based anticipation. If the model says that a certain acceleration, velocity, force, voltage, torque, heat rate, or flow rate is needed, the feedforward term supplies it directly.
+
+The simplest possible example is a point mass:
+
+$$
+m\ddot{x} = u.
+$$
+
+If the desired position is $x_d(t)$, then the desired acceleration is $\ddot{x}_d(t)$. Substituting the desired motion into the model gives
+
+$$
+u_{ff}(t) = m\ddot{x}_d(t).
+$$
+
+This is feedforward control. The input is not waiting for an error. It is computed from the desired trajectory and the dynamics.
+
+::: {.callout-note appearance="simple"}
+## Learning Goals
+
+By the end of this note, you should be able to:
+
+1. explain feedforward control as model-based anticipation,
+2. distinguish feedforward from feedback,
+3. derive feedforward terms from simple dynamic models,
+4. recognize the limits created by model mismatch, non-smooth references, and actuator constraints,
+5. simulate pure feedforward, pure feedback, and feedforward plus feedback.
+:::
+
+## Feedforward Versus Feedback
+
+The usual tracking-control notation is:
+
+| Symbol | Meaning |
+|---|---|
+| $r(t)$ or $x_d(t)$ | desired reference or desired state |
+| $y(t)$ or $x(t)$ | measured output or state |
+| $e(t)$ | tracking error, usually $r(t)-y(t)$ or $x_d(t)-x(t)$ |
+| $u(t)$ | input applied to the plant |
+| $u_{ff}(t)$ | feedforward input |
+| $u_{fb}(t)$ | feedback input |
+
+: Common feedforward and feedback notation. {#tbl-notation}
+
+A feedback controller uses the tracking error:
+
+$$
+u_{fb}(t) = K_p e(t)
+$$
+
+or, for a second-order system,
+
+$$
+u_{fb}(t) = K_p\left(x_d - x\right) + K_d\left(\dot{x}_d - \dot{x}\right).
+$$
+
+A feedforward controller uses the desired motion and a model:
+
+$$
+u_{ff}(t) = \text{input predicted by the model along the desired trajectory}.
+$$
+
+In practice, the control law is often
+
+$$
+u(t) = u_{ff}(t) + u_{fb}(t).
+$$
+
+The feedforward term does the planned work. The feedback term corrects what the feedforward term gets wrong.
+
+| Aspect | Feedforward | Feedback |
+|---|---|---|
+| Main purpose | Anticipate the required input | Correct tracking error |
+| Uses measured error? | Not necessarily | Yes |
+| Needs a model? | Usually yes | Less strongly |
+| Acts before an error appears? | Yes | No |
+| Handles unknown disturbances alone? | Poorly | Better |
+| Sensitive to model mismatch? | Yes | Usually less sensitive |
+| Typical role | Nominal tracking and known-disturbance compensation | Robust correction |
+
+: Feedforward and feedback are complementary, not competitors. {#tbl-ff-vs-fb}
+
+This distinction is important because feedback alone can be late. If a reference changes quickly, a feedback controller first sees error, then reacts. Feedforward can apply much of the required input at the moment the reference demands it.
+
+## A Useful Block Diagram
+
+One common structure is a two-degree-of-freedom controller: the reference goes through a feedforward path, while the tracking error goes through a feedback path.
+
+```{mermaid}
+flowchart LR
+  R["reference r(t)"] --> FF["feedforward model inverse"]
+  R --> E(("r(t) - y(t)"))
+  Y["measured output y(t)"] --> E
+  E --> FB["feedback controller"]
+  FF --> U(("sum"))
+  FB --> U
+  U --> P["plant"]
+  P --> Y
+```
+
+Conceptually:
+
+$$
+u = u_{ff}(r, \dot{r}, \ddot{r}, \ldots) + u_{fb}(r-y, \dot{r}-\dot{y}, \ldots).
+$$
+
+The feedforward path is driven by what we want. The feedback path is driven by what went wrong.
+
+## Deriving Feedforward From A Model
+
+For a general nonlinear state-space model,
+
+$$
+\dot{x} = f(x,u),
+$$
+
+and a desired state trajectory $x_d(t)$, an ideal feedforward input satisfies
+
+$$
+\dot{x}_d(t) = f(x_d(t), u_{ff}(t)).
+$$
+
+So the derivation is:
+
+1. Write the plant model.
+2. Specify the desired trajectory and its needed derivatives.
+3. Substitute the desired trajectory into the model.
+4. Solve for the input.
+5. Check whether the input is physically feasible.
+
+This is sometimes called inverse dynamics. A forward model answers:
+
+$$
+\text{if I apply } u, \text{ what motion happens?}
+$$
+
+An inverse model answers:
+
+$$
+\text{if I want this motion, what } u \text{ is required?}
+$$
+
+Feedforward control usually uses the inverse-model question.
+
+## Example 1: Mass
+
+Start with the simplest second-order system:
+
+$$
+m\ddot{x} = u.
+$$
+
+If $x(t)=x_d(t)$ is the intended motion, then
+
+$$
+\ddot{x}(t)=\ddot{x}_d(t).
+$$
+
+Substitute the desired motion:
+
+$$
+m\ddot{x}_d = u_{ff}.
+$$
+
+Therefore,
+
+$$
+u_{ff} = m\ddot{x}_d.
+$$
+
+If the desired trajectory has zero acceleration, this ideal mass needs no force. If the desired acceleration is large, the feedforward force is large.
+
+## Example 2: Mass With Damping
+
+Now include viscous damping:
+
+$$
+m\ddot{x} + b\dot{x} = u.
+$$
+
+Substitute $x=x_d$, $\dot{x}=\dot{x}_d$, and $\ddot{x}=\ddot{x}_d$:
+
+$$
+u_{ff} = m\ddot{x}_d + b\dot{x}_d.
+$$
+
+The first term creates the desired acceleration. The second term compensates the force lost to damping.
+
+This already shows an important design pattern:
+
+$$
+u_{ff} =
+\text{inertial term}
++ \text{loss compensation}.
+$$
+
+## Example 3: Mass-Spring-Damper
+
+For a mass-spring-damper system,
+
+$$
+m\ddot{x} + b\dot{x} + kx = u.
+$$
+
+The feedforward input is
+
+$$
+u_{ff} = m\ddot{x}_d + b\dot{x}_d + kx_d.
+$$
+
+Each term has a physical meaning:
+
+| Term | Meaning |
+|---|---|
+| $m\ddot{x}_d$ | force required for desired acceleration |
+| $b\dot{x}_d$ | force required to overcome damping |
+| $kx_d$ | force required to balance spring force |
+
+: Inverse dynamics for a mass-spring-damper system. {#tbl-msd-feedforward}
+
+If the model is exact and the system starts on the desired trajectory, this feedforward input makes the system follow $x_d(t)$ exactly in the ideal simulation.
+
+## Example 4: DC Motor Speed
+
+A simplified DC motor speed model can be written as
+
+$$
+J\dot{\omega} + b\omega = K_t i,
+$$
+
+where:
+
+| Symbol | Meaning |
+|---|---|
+| $J$ | rotor inertia |
+| $b$ | viscous friction coefficient |
+| $\omega$ | angular speed |
+| $i$ | armature current |
+| $K_t$ | torque constant |
+
+: Simplified DC motor notation. {#tbl-motor-notation}
+
+If the goal is to follow a desired speed $\omega_d(t)$, then
+
+$$
+J\dot{\omega}_d + b\omega_d = K_t i_{ff}.
+$$
+
+Solving for current gives
+
+$$
+i_{ff} = \frac{J\dot{\omega}_d + b\omega_d}{K_t}.
+$$
+
+The acceleration term $J\dot{\omega}_d/K_t$ produces the required torque. The speed term $b\omega_d/K_t$ compensates friction.
+
+If voltage is the command, a simple electrical model is
+
+$$
+V = Ri + L\dot{i} + K_e\omega.
+$$
+
+A voltage feedforward term may therefore include:
+
+| Term | Meaning |
+|---|---|
+| $Ri$ | resistive voltage drop |
+| $L\dot{i}$ | inductive voltage needed to change current |
+| $K_e\omega$ | back-EMF compensation |
+
+: Common voltage feedforward components for a DC motor. {#tbl-motor-voltage}
+
+The same principle appears again: write the model, insert the desired motion, and solve for the input.
+
+## Reference Feedforward And Disturbance Feedforward
+
+There are two common ways feedforward enters a controller.
+
+Reference feedforward computes the input needed to follow a desired command. The mass-spring-damper formula above is an example:
+
+$$
+u_{ff} = m\ddot{x}_d + b\dot{x}_d + kx_d.
+$$
+
+Disturbance feedforward compensates a measured or known disturbance. Suppose a system is
+
+$$
+m\ddot{x} = u + d,
+$$
+
+where $d(t)$ is a measurable disturbance force. If the goal is to realize the nominal force $m\ddot{x}_d$, then choose
+
+$$
+u_{ff} = m\ddot{x}_d - d.
+$$
+
+The controller subtracts the known disturbance before it becomes a tracking error. This is useful only when the disturbance is known or measurable early enough.
+
+## Why Smooth References Matter
+
+Feedforward often requires derivatives of the reference. For the mass-spring-damper example,
+
+$$
+u_{ff} = m\ddot{x}_d + b\dot{x}_d + kx_d.
+$$
+
+So the desired position must be differentiable at least twice. A step command in position is not physically friendly because it implies an instantaneous change in position and, effectively, unbounded velocity and acceleration.
+
+That is why practical feedforward designs usually use smooth trajectories instead of raw steps. A smooth trajectory keeps velocity, acceleration, and required input finite.
+
+```{python}
+#| label: setup
+#| include: false
+import numpy as np
+import matplotlib.pyplot as plt
+
+plt.rcParams.update({
+    "figure.figsize": (8, 4.8),
+    "axes.grid": True,
+    "grid.alpha": 0.25,
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+})
+```
+
+```{python}
+#| label: fig-reference-smoothness
+#| fig-cap: "A smooth command gives finite velocity and acceleration, which makes model-based feedforward physically meaningful."
+t = np.linspace(0.0, 6.0, 600)
+step = np.where(t >= 1.0, 1.0, 0.0)
+
+tau = np.clip((t - 1.0) / 3.0, 0.0, 1.0)
+smooth = 10 * tau**3 - 15 * tau**4 + 6 * tau**5
+
+fig, ax = plt.subplots()
+ax.plot(t, step, label="step command", color="tab:red", linewidth=2)
+ax.plot(t, smooth, label="smooth rest-to-rest command", color="tab:blue", linewidth=2.5)
+ax.set_xlabel("time [s]")
+ax.set_ylabel("desired position")
+ax.set_title("Feedforward prefers smooth references")
+ax.legend()
+plt.show()
+```
+
+The smooth curve in the figure is a quintic rest-to-rest transition. Its velocity and acceleration start and end at zero, which avoids unrealistic impulses in the feedforward input.
+
+## Simulation: Feedforward, Feedback, And Model Mismatch
+
+Now simulate the mass-spring-damper system:
+
+$$
+m\ddot{x} + b\dot{x} + kx = u.
+$$
+
+The nominal model used by the feedforward controller is:
+
+$$
+m_n = 1.0, \qquad b_n = 0.4, \qquad k_n = 2.0.
+$$
+
+The actual plant used in the mismatch simulation is:
+
+$$
+m_a = 1.25, \qquad b_a = 0.55, \qquad k_a = 2.4.
+$$
+
+The desired trajectory is smooth:
+
+$$
+x_d(t) = A\left(1-\cos(\omega t)\right).
+$$
+
+Its derivatives are:
+
+$$
+\dot{x}_d(t)=A\omega\sin(\omega t),
+\qquad
+\ddot{x}_d(t)=A\omega^2\cos(\omega t).
+$$
+
+The feedforward input from the nominal model is:
+
+$$
+u_{ff} = m_n\ddot{x}_d + b_n\dot{x}_d + k_nx_d.
+$$
+
+The feedback term is a PD correction:
+
+$$
+u_{fb} = K_p(x_d-x) + K_d(\dot{x}_d-\dot{x}).
+$$
+
+```{python}
+#| label: simulation-functions
+def desired_motion(t, amplitude=0.5, omega=1.0):
+    t = np.asarray(t)
+    xd = amplitude * (1.0 - np.cos(omega * t))
+    vd = amplitude * omega * np.sin(omega * t)
+    ad = amplitude * omega**2 * np.cos(omega * t)
+    return xd, vd, ad
+
+
+nominal = {"m": 1.0, "b": 0.4, "k": 2.0}
+actual = {"m": 1.25, "b": 0.55, "k": 2.4}
+
+
+def feedforward(t, params):
+    xd, vd, ad = desired_motion(t)
+    return params["m"] * ad + params["b"] * vd + params["k"] * xd
+
+
+def pd_feedback(t, x, v, kp=18.0, kd=7.0):
+    xd, vd, _ = desired_motion(t)
+    return kp * (xd - x) + kd * (vd - v)
+
+
+def simulate(controller, params, t, x0=(0.0, 0.0)):
+    state = np.zeros((len(t), 2))
+    effort = np.zeros(len(t))
+    state[0] = x0
+
+    def dynamics(current_state, current_t):
+        x, v = current_state
+        u = float(controller(current_t, x, v))
+        dx = v
+        dv = (u - params["b"] * v - params["k"] * x) / params["m"]
+        return np.array([dx, dv]), u
+
+    for i in range(len(t) - 1):
+        dt = t[i + 1] - t[i]
+        k1, u1 = dynamics(state[i], t[i])
+        k2, _ = dynamics(state[i] + 0.5 * dt * k1, t[i] + 0.5 * dt)
+        k3, _ = dynamics(state[i] + 0.5 * dt * k2, t[i] + 0.5 * dt)
+        k4, _ = dynamics(state[i] + dt * k3, t[i] + dt)
+        state[i + 1] = state[i] + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+        effort[i] = u1
+
+    effort[-1] = float(controller(t[-1], state[-1, 0], state[-1, 1]))
+    return state, effort
+
+
+t = np.linspace(0.0, 12.0, 2401)
+xd, vd, ad = desired_motion(t)
+
+controllers = {
+    "exact feedforward": lambda ti, x, v: feedforward(ti, actual),
+    "feedback only": lambda ti, x, v: pd_feedback(ti, x, v),
+    "feedforward only, mismatched model": lambda ti, x, v: feedforward(ti, nominal),
+    "feedforward + feedback": lambda ti, x, v: feedforward(ti, nominal) + pd_feedback(ti, x, v),
+}
+
+results = {}
+results["exact feedforward"] = simulate(controllers["exact feedforward"], actual, t)
+results["feedback only"] = simulate(controllers["feedback only"], actual, t)
+results["feedforward only, mismatched model"] = simulate(
+    controllers["feedforward only, mismatched model"], actual, t
+)
+results["feedforward + feedback"] = simulate(controllers["feedforward + feedback"], actual, t)
+```
+
+```{python}
+#| label: fig-tracking-comparison
+#| fig-cap: "Feedforward gives excellent tracking when the model is exact. With model mismatch, feedback reduces the remaining error."
+fig, axes = plt.subplots(2, 1, figsize=(8, 6.5), sharex=True)
+
+axes[0].plot(t, xd, color="black", linewidth=2.5, label="desired")
+for name, (state, effort) in results.items():
+    axes[0].plot(t, state[:, 0], linewidth=1.8, label=name)
+axes[0].set_ylabel("position [m]")
+axes[0].set_title("Tracking comparison")
+axes[0].legend(loc="upper right", fontsize=8)
+
+for name, (state, effort) in results.items():
+    error = xd - state[:, 0]
+    axes[1].plot(t, error, linewidth=1.8, label=name)
+axes[1].axhline(0.0, color="black", linewidth=0.8)
+axes[1].set_xlabel("time [s]")
+axes[1].set_ylabel("tracking error [m]")
+
+plt.show()
+```
+
+```{python}
+#| label: tracking-error-table
+#| output: asis
+print("| Controller | Max abs error [m] | RMS error [m] | Peak input magnitude |")
+print("|---|---:|---:|---:|")
+for name, (state, effort) in results.items():
+    error = xd - state[:, 0]
+    max_error = np.max(np.abs(error))
+    rms_error = np.sqrt(np.mean(error**2))
+    peak_effort = np.max(np.abs(effort))
+    print(f"| {name} | {max_error:.4f} | {rms_error:.4f} | {peak_effort:.3f} |")
+```
+
+The exact-feedforward case tracks almost perfectly because the plant and feedforward model match and the initial condition lies on the desired trajectory.
+
+The mismatched-feedforward case is different. The controller applies the input required by the nominal model, but the actual plant has different inertia, damping, and stiffness. The result is tracking error.
+
+The feedforward-plus-feedback case keeps the anticipatory input and adds correction. This is the usual reason to combine them:
+
+$$
+\text{feedforward handles the planned physics, feedback handles the uncertainty.}
+$$
+
+## Looking At The Input
+
+The next plot compares the applied input. Feedback-only control can track, but it must create the needed motion from error. Feedforward-plus-feedback starts with a physically meaningful nominal input, so the feedback term has less work to do.
+
+```{python}
+#| label: fig-control-effort
+#| fig-cap: "The feedforward input carries the planned motion. Feedback adds correction when the plant does not match the model."
+fig, ax = plt.subplots()
+for name in ["feedback only", "feedforward only, mismatched model", "feedforward + feedback"]:
+    state, effort = results[name]
+    ax.plot(t, effort, linewidth=1.9, label=name)
+
+ax.set_xlabel("time [s]")
+ax.set_ylabel("input force [N]")
+ax.set_title("Control input comparison")
+ax.legend(fontsize=8)
+plt.show()
+```
+
+## What Can Go Wrong
+
+Feedforward is powerful, but it is fragile if used alone. The main failure modes are predictable.
+
+Model mismatch. If the model parameters are wrong, the predicted input is wrong. This is why pure feedforward rarely solves the whole control problem by itself.
+
+Unknown disturbances. Feedforward can compensate known or measured disturbances, but it cannot correct an unknown disturbance unless that disturbance is estimated or measured.
+
+Bad initial conditions. If the ideal feedforward assumes $x(0)=x_d(0)$ and $\dot{x}(0)=\dot{x}_d(0)$, but the real system starts elsewhere, pure feedforward will not remove that initial error.
+
+Non-smooth references. If the reference has discontinuities, the required derivative terms may be infinite or unrealistic.
+
+Actuator saturation. The inverse model may ask for an input the actuator cannot provide. A computed input is not automatically a feasible input.
+
+Non-minimum phase behavior. Some systems have inverse dynamics that are unstable. In those cases, directly inverting the model can produce commands that are physically or numerically unusable.
+
+Measurement timing. Disturbance feedforward works only if the disturbance is known early enough and with enough accuracy.
+
+## Practical Design Workflow
+
+A practical feedforward design usually follows this workflow:
+
+1. Choose the reference shape.
+2. Make the reference smooth enough for the model inverse.
+3. Write the plant model at the level of detail needed for tracking.
+4. Derive the nominal feedforward input.
+5. Check the command against actuator limits.
+6. Simulate with the nominal model.
+7. Simulate with parameter mismatch and disturbances.
+8. Add feedback for robustness.
+9. Retune the feedforward and feedback terms together.
+10. Monitor tracking error, input magnitude, and sensitivity to uncertainty.
+
+The key engineering habit is to test the controller against imperfect conditions. A feedforward term that works only when every parameter is exact is a useful derivation, but not yet a robust controller.
+
+## A Compact Mental Model
+
+For second-order mechanical systems, feedforward often has this shape:
+
+$$
+u_{ff}
+=
+\text{inertia compensation}
++ \text{damping/friction compensation}
++ \text{stiffness/gravity/load compensation}.
+$$
+
+For electrical or actuator systems, it often has this shape:
+
+$$
+u_{ff}
+=
+\text{dynamic term}
++ \text{loss term}
++ \text{back-effect compensation}.
+$$
+
+For disturbance rejection, it often has this shape:
+
+$$
+u_{ff}
+=
+\text{nominal command}
+- \text{known disturbance effect}.
+$$
+
+The details change from system to system, but the logic is the same: use what is known before relying on error correction.
+
+## Key Takeaways
+
+Feedforward control is model-based anticipation. It computes the input expected to produce a desired motion or cancel a known disturbance.
+
+Feedback control is error-based correction. It reacts to the difference between desired and actual behavior.
+
+Pure feedforward can track exactly in an ideal model, but it is sensitive to model mismatch, disturbances, and bad initial conditions.
+
+Pure feedback can correct uncertainty, but it may lag behind demanding references because it must first see error.
+
+The common high-performance structure is:
+
+$$
+u = u_{ff} + u_{fb}.
+$$
+
+Feedforward handles the planned behavior. Feedback handles reality.

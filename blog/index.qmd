@@ -4,6 +4,7 @@ description: >
   Notes, experiments, and write-ups on control systems, optimization, and related tooling.
 listing:
   contents:
+    - "feedforward-control/index.qmd"
     - "bicycle-model-basics/index.qmd"
     - "optimal-control-template/index.qmd"
     - "optimization-workflow-template/index.qmd"

@@ -4,6 +4,7 @@ project:
   render:
     - "index.qmd"
     - "blog/index.qmd"
+    - "blog/feedforward-control/index.qmd"
     - "blog/bicycle-model-basics/index.qmd"
     - "blog/optimal-control-template/index.qmd"
     - "blog/optimization-workflow-template/index.qmd"
