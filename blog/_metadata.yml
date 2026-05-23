@@ -2,11 +2,7 @@ title-block-banner: true
 toc: true
 toc-location: right
 
-comments:
-  giscus:
-    repo: kirar2004/Mind-In-Motion
-    mapping: pathname
-    category: Comments
+comments: false
 
 filters:
   - lightbox
