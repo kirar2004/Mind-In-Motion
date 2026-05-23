@@ -178,6 +178,8 @@ $$
 
 Feedforward control usually uses the inverse-model question.
 
+For a deeper discussion of why inverse models are powerful but fragile, see the companion note on [inverse problems and inverse models](/blog/inverse-problems/).
+
 ## Example 1: Mass
 
 Start with the simplest second-order system:

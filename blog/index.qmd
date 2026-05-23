@@ -5,6 +5,7 @@ description: >
 listing:
   contents:
     - "feedforward-control/index.qmd"
+    - "inverse-problems/index.qmd"
     - "bicycle-model-basics/index.qmd"
     - "optimal-control-template/index.qmd"
     - "optimization-workflow-template/index.qmd"

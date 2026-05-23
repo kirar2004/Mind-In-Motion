@@ -1,0 +1,664 @@
+---
+title: "Inverse Problems and Inverse Models"
+description: "Why computing the input from the desired output is powerful, fragile, and central to feedforward control."
+summary: "A learning note on inverse problems, inverse dynamics, ill-posedness, non-uniqueness, infeasibility, regularization, and train feedforward control."
+date: "2026-05-23"
+slug: inverse-problems
+categories:
+  - Control
+  - Feedforward
+  - Optimization
+  - Train Control
+format:
+  html:
+    toc: true
+    code-copy: true
+    code-overflow: wrap
+execute:
+  warning: false
+  message: false
+---
+
+## The Main Question
+
+In a forward model, we apply an input and predict what the system will do.
+
+$$
+\text{input } u + \text{state } x + \text{model } F
+\quad \longrightarrow \quad
+\text{output } y
+$$
+
+An inverse problem goes in the opposite direction. We start from a desired or measured effect and ask what cause would explain it.
+
+$$
+\text{desired output } y_{\text{ref}} + \text{model } F
+\quad \longrightarrow \quad
+\text{required input } u
+$$
+
+For feedforward control, the inverse problem is:
+
+> Given the desired motion, what command should be applied before a tracking error appears?
+
+This is the reason inverse models appear naturally in feedforward control. If feedback is reactive, feedforward is anticipatory.
+
+## Forward Model Versus Inverse Model
+
+A forward model answers:
+
+$$
+y = F(u)
+$$
+
+or, for a dynamic system,
+
+$$
+\dot{x} = f(x,u), \qquad y = h(x,u).
+$$
+
+Given the current state and input, the model predicts the future state or output.
+
+An inverse model answers:
+
+$$
+u = F^{-1}(y_{\text{ref}})
+$$
+
+or, more generally,
+
+$$
+\dot{x}_{\text{ref}} = f(x_{\text{ref}}, u_{\text{ff}}).
+$$
+
+The feedforward input $u_{\text{ff}}$ is the input that should make the desired trajectory satisfy the model.
+
+::: {.callout-note appearance="simple"}
+## Control Interpretation
+
+The inverse model is not a separate topic from feedforward control. In many model-based controllers, feedforward is the inverse model evaluated along the desired trajectory.
+
+$$
+u(t) = u_{\text{ff}}(t) + u_{\text{fb}}(t)
+$$
+
+The inverse model supplies $u_{\text{ff}}$. The feedback controller supplies correction.
+:::
+
+## A Simple Mechanical Example
+
+Start with a point mass:
+
+$$
+m\ddot{x} = u.
+$$
+
+If the desired position is $x_d(t)$, the desired acceleration is $\ddot{x}_d(t)$. Substituting the desired motion into the model gives
+
+$$
+u_{\text{ff}} = m\ddot{x}_d.
+$$
+
+That is an inverse model. It converts the desired motion into the force needed to produce it.
+
+If damping is included,
+
+$$
+m\ddot{x} + b\dot{x} = u,
+$$
+
+then the inverse model becomes
+
+$$
+u_{\text{ff}} = m\ddot{x}_d + b\dot{x}_d.
+$$
+
+The required input now has two parts:
+
+1. $m\ddot{x}_d$: force needed for acceleration,
+2. $b\dot{x}_d$: force needed to overcome damping.
+
+## Train Feedforward Example
+
+For longitudinal train control, a simplified force balance is
+
+$$
+m a = F_{\text{command}} - F_{\text{resistance}}(v) - F_{\text{grade}}(s).
+$$
+
+The forward model says:
+
+> If I apply a traction or braking force, what acceleration will the train have?
+
+The inverse model says:
+
+> If I want a particular acceleration, what traction or braking force is required?
+
+Solving the force balance for the command gives
+
+$$
+F_{\text{command}}
+=
+m a_{\text{ref}}
++ F_{\text{resistance}}(v_{\text{ref}})
++ F_{\text{grade}}(s).
+$$
+
+This is the feedforward command. It includes the force for acceleration, rolling and aerodynamic resistance, and track slope.
+
+::: {.callout-warning appearance="simple"}
+## Why This Can Fail
+
+The formula may produce a force larger than the traction system can deliver, larger than the braking system can safely apply, or larger than adhesion allows. In that case the algebraic inverse exists, but the physical inverse does not.
+:::
+
+## Interactive Train Inverse Calculator
+
+Move the sliders to see how the required feedforward force changes. The assumed actuator limits are 300 kN for traction and 220 kN for braking.
+
+```{=html}
+<div class="inverse-demo">
+  <div class="inverse-controls">
+    <label>Train mass <output id="massOut">240 t</output>
+      <input id="mass" type="range" min="80" max="600" value="240" step="10">
+    </label>
+
+    <label>Speed <output id="speedOut">60 km/h</output>
+      <input id="speed" type="range" min="0" max="140" value="60" step="1">
+    </label>
+
+    <label>Desired acceleration <output id="accelOut">0.20 m/s^2</output>
+      <input id="accel" type="range" min="-1.2" max="1.2" value="0.2" step="0.02">
+    </label>
+
+    <label>Track grade <output id="gradeOut">8 per 1000</output>
+      <input id="grade" type="range" min="-30" max="30" value="8" step="1">
+    </label>
+  </div>
+
+  <div class="inverse-results">
+    <div class="inverse-metrics">
+      <div><span>Required command</span><strong id="forceMetric">0 kN</strong></div>
+      <div><span>Mechanical power</span><strong id="powerMetric">0 kW</strong></div>
+      <div><span>Mode</span><strong id="modeMetric">Traction</strong></div>
+    </div>
+
+    <div id="status" class="inverse-status">The inverse command is within the assumed actuator limits.</div>
+
+    <div class="inverse-bars">
+      <div class="bar-row">
+        <span>Inertial term</span>
+        <div class="bar-track"><div id="barInertial" class="bar inertial"></div></div>
+        <output id="inertialVal">0 kN</output>
+      </div>
+      <div class="bar-row">
+        <span>Resistance</span>
+        <div class="bar-track"><div id="barRolling" class="bar rolling"></div></div>
+        <output id="rollingVal">0 kN</output>
+      </div>
+      <div class="bar-row">
+        <span>Grade term</span>
+        <div class="bar-track"><div id="barGrade" class="bar grade"></div></div>
+        <output id="gradeVal">0 kN</output>
+      </div>
+      <div class="bar-row">
+        <span>Total command</span>
+        <div class="bar-track"><div id="barTotal" class="bar total"></div></div>
+        <output id="totalVal">0 kN</output>
+      </div>
+    </div>
+
+    <pre id="demoEquation" class="inverse-equation">F_command = 0 + 0 + 0 = 0 kN</pre>
+  </div>
+</div>
+```
+
+```{=html}
+<style>
+.inverse-demo {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(320px, 1.2fr);
+  gap: 1rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.inverse-controls,
+.inverse-results {
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background: var(--bs-body-bg, #fff);
+}
+
+.inverse-controls {
+  display: grid;
+  gap: 1rem;
+}
+
+.inverse-controls label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 650;
+}
+
+.inverse-controls output {
+  float: right;
+  color: #2563eb;
+  font-variant-numeric: tabular-nums;
+}
+
+.inverse-controls input {
+  width: 100%;
+}
+
+.inverse-results {
+  display: grid;
+  gap: 1rem;
+}
+
+.inverse-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.inverse-metrics div {
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 0.5rem;
+  padding: 0.85rem;
+}
+
+.inverse-metrics span {
+  display: block;
+  color: var(--bs-secondary-color, #6c757d);
+  font-size: 0.83rem;
+}
+
+.inverse-metrics strong {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.inverse-status {
+  border-radius: 0.5rem;
+  padding: 0.85rem;
+  background: #ecfdf5;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+  font-weight: 700;
+}
+
+.inverse-status.warn {
+  background: #fff7ed;
+  color: #9a3412;
+  border-color: #fed7aa;
+}
+
+.inverse-status.bad {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.inverse-bars {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 8.5rem 1fr 5.5rem;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.bar-row output {
+  text-align: right;
+  color: var(--bs-secondary-color, #6c757d);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-track {
+  height: 1rem;
+  position: relative;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e7ebf2;
+}
+
+.bar {
+  position: absolute;
+  inset: 0 auto 0 50%;
+  width: 0;
+  border-radius: 999px;
+  background: #2563eb;
+}
+
+.bar.negative {
+  right: 50%;
+  left: auto;
+  background: #b91c1c;
+}
+
+.bar.rolling {
+  background: #0f766e;
+}
+
+.bar.grade {
+  background: #b7791f;
+}
+
+.inverse-equation {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 800px) {
+  .inverse-demo,
+  .inverse-metrics,
+  .bar-row {
+    grid-template-columns: 1fr;
+  }
+
+  .bar-row output {
+    text-align: left;
+  }
+}
+</style>
+```
+
+```{=html}
+<script>
+(() => {
+  const root = document.currentScript.closest("main") || document;
+  const get = (selector) => root.querySelector(selector) || document.querySelector(selector);
+  const els = {
+    mass: get("#mass"),
+    speed: get("#speed"),
+    accel: get("#accel"),
+    grade: get("#grade"),
+    massOut: get("#massOut"),
+    speedOut: get("#speedOut"),
+    accelOut: get("#accelOut"),
+    gradeOut: get("#gradeOut"),
+    forceMetric: get("#forceMetric"),
+    powerMetric: get("#powerMetric"),
+    modeMetric: get("#modeMetric"),
+    status: get("#status"),
+    inertialVal: get("#inertialVal"),
+    rollingVal: get("#rollingVal"),
+    gradeVal: get("#gradeVal"),
+    totalVal: get("#totalVal"),
+    barInertial: get("#barInertial"),
+    barRolling: get("#barRolling"),
+    barGrade: get("#barGrade"),
+    barTotal: get("#barTotal"),
+    demoEquation: get("#demoEquation")
+  };
+
+  const tractionLimitKn = 300;
+  const brakeLimitKn = -220;
+  const gravity = 9.81;
+
+  function fmt(value, digits = 0) {
+    return Number(value).toLocaleString("en-US", {
+      maximumFractionDigits: digits,
+      minimumFractionDigits: digits
+    });
+  }
+
+  function setSignedBar(el, valueKn, scaleKn) {
+    const width = Math.min(Math.abs(valueKn) / scaleKn, 1) * 50;
+    el.classList.toggle("negative", valueKn < 0);
+    el.style.width = `${width}%`;
+    if (valueKn < 0) {
+      el.style.left = "auto";
+      el.style.right = "50%";
+    } else {
+      el.style.left = "50%";
+      el.style.right = "auto";
+    }
+  }
+
+  function updateDemo() {
+    const massTonnes = Number(els.mass.value);
+    const speedKmh = Number(els.speed.value);
+    const accel = Number(els.accel.value);
+    const gradePerThousand = Number(els.grade.value);
+    const massKg = massTonnes * 1000;
+    const speedMs = speedKmh / 3.6;
+    const grade = gradePerThousand / 1000;
+
+    const inertialKn = massKg * accel / 1000;
+    const resistanceKn = (1800 + 36 * speedMs + 7.2 * speedMs * speedMs) / 1000;
+    const gradeKn = massKg * gravity * grade / 1000;
+    const totalKn = inertialKn + resistanceKn + gradeKn;
+    const powerKw = totalKn * speedMs;
+
+    els.massOut.textContent = `${fmt(massTonnes)} t`;
+    els.speedOut.textContent = `${fmt(speedKmh)} km/h`;
+    els.accelOut.textContent = `${fmt(accel, 2)} m/s^2`;
+    els.gradeOut.textContent = `${fmt(gradePerThousand)} per 1000`;
+    els.forceMetric.textContent = `${fmt(totalKn, 1)} kN`;
+    els.powerMetric.textContent = `${fmt(powerKw, 0)} kW`;
+    els.modeMetric.textContent = totalKn >= 0 ? "Traction" : "Braking";
+    els.inertialVal.textContent = `${fmt(inertialKn, 1)} kN`;
+    els.rollingVal.textContent = `${fmt(resistanceKn, 1)} kN`;
+    els.gradeVal.textContent = `${fmt(gradeKn, 1)} kN`;
+    els.totalVal.textContent = `${fmt(totalKn, 1)} kN`;
+
+    const scale = 360;
+    setSignedBar(els.barInertial, inertialKn, scale);
+    setSignedBar(els.barRolling, resistanceKn, scale);
+    setSignedBar(els.barGrade, gradeKn, scale);
+    setSignedBar(els.barTotal, totalKn, scale);
+
+    els.demoEquation.textContent =
+      `F_command = ${fmt(inertialKn, 1)} + ${fmt(resistanceKn, 1)} + ${fmt(gradeKn, 1)} = ${fmt(totalKn, 1)} kN`;
+
+    els.status.className = "inverse-status";
+    if (totalKn > tractionLimitKn) {
+      els.status.classList.add("bad");
+      els.status.textContent = `Infeasible traction demand: ${fmt(totalKn, 1)} kN exceeds the ${tractionLimitKn} kN limit.`;
+    } else if (totalKn < brakeLimitKn) {
+      els.status.classList.add("bad");
+      els.status.textContent = `Infeasible braking demand: ${fmt(totalKn, 1)} kN exceeds the ${Math.abs(brakeLimitKn)} kN braking limit.`;
+    } else if (Math.abs(totalKn) > 0.82 * (totalKn >= 0 ? tractionLimitKn : Math.abs(brakeLimitKn))) {
+      els.status.classList.add("warn");
+      els.status.textContent = "The inverse command is feasible but close to the assumed actuator limit.";
+    } else {
+      els.status.textContent = "The inverse command is within the assumed actuator limits.";
+    }
+  }
+
+  [els.mass, els.speed, els.accel, els.grade].forEach((input) => {
+    input.addEventListener("input", updateDemo);
+  });
+
+  updateDemo();
+})();
+</script>
+```
+
+## What Makes an Inverse Problem Well Posed?
+
+A classical way to judge inverse problems comes from Hadamard. A problem is well posed if:
+
+1. a solution exists,
+2. the solution is unique,
+3. the solution depends continuously on the data.
+
+Most real inverse problems in control violate at least one of these.
+
+## Problem 1: No Solution
+
+The desired output may be physically impossible.
+
+For a train, a reference acceleration may require more traction than the motors can deliver. A stopping profile may require more braking than adhesion permits. A speed profile may require violating jerk or comfort constraints.
+
+In that case, the inverse formula still gives a number, but that number cannot be applied.
+
+This is the difference between an algebraic inverse and a feasible inverse.
+
+## Problem 2: Non-Uniqueness
+
+Different causes can produce the same effect.
+
+A train can arrive at the next station at the same time using many different command histories:
+
+- accelerate hard, coast, then brake,
+- accelerate gently and brake gently,
+- use more coasting to save energy,
+- use more traction to recover from a delay.
+
+The output target alone does not choose one solution. We need an additional objective:
+
+$$
+\min \text{energy}, \qquad \min \text{travel time}, \qquad \min \text{jerk}, \qquad \min \text{tracking error}.
+$$
+
+This turns the inverse problem into an optimization problem.
+
+## Problem 3: Ill-Conditioning
+
+An inverse is ill-conditioned when small changes in the target or data create large changes in the answer.
+
+This often happens when derivatives are involved. A smooth-looking position reference can have noisy velocity or acceleration if it is differentiated numerically. Since feedforward terms often depend on $\dot{x}_d$ and $\ddot{x}_d$, the inverse model can amplify noise.
+
+For example:
+
+$$
+u_{\text{ff}} = m\ddot{x}_d + b\dot{x}_d.
+$$
+
+If $\ddot{x}_d$ is noisy, the force command is noisy.
+
+The practical fix is to smooth the reference, parameterize it with splines or polynomials, and penalize aggressive derivatives.
+
+## Problem 4: Model Mismatch
+
+The inverse model is only correct if the forward model is correct.
+
+In train control, model mismatch can come from:
+
+- wrong train mass,
+- uncertain rolling resistance,
+- aerodynamic drag error,
+- grade-map error,
+- actuator delay,
+- traction efficiency variation,
+- wheel-rail adhesion changes,
+- passenger load variation.
+
+If the model underestimates resistance, the feedforward command will be too small. If the model overestimates braking capability, the planned stop may become infeasible.
+
+This is why feedforward is normally combined with feedback.
+
+## Problem 5: Unstable Or Noncausal Inverses
+
+Some systems cannot be inverted safely in real time.
+
+If the system has delay, the exact inverse may require knowing the future. If the system is nonminimum phase, the exact inverse may excite unstable internal dynamics.
+
+In such systems, a naive inverse can make the controller fragile even if the forward system is stable.
+
+The practical solution is usually approximate inversion, preview control, model predictive control, or a stable filtered inverse.
+
+## Problem 6: Singularities
+
+An inverse may become undefined at certain operating points.
+
+Mathematically, this happens when the mapping from input to output loses rank. Physically, it means the input temporarily cannot influence the output in the required direction.
+
+Near a singularity, the inverse may demand very large inputs:
+
+$$
+u = \frac{y_{\text{ref}}}{\epsilon}
+$$
+
+When $\epsilon$ is small, the command becomes huge. This is another form of inverse amplification.
+
+## Problem 7: Constraints And Saturation
+
+Real systems have limits:
+
+- maximum traction,
+- maximum braking,
+- actuator rate limits,
+- jerk limits,
+- voltage and current limits,
+- temperature limits,
+- safety margins,
+- state constraints.
+
+An inverse formula that ignores constraints may give a command that cannot be executed. Once the actuator saturates, the forward response no longer matches what the inverse assumed.
+
+This is one reason constrained optimization and MPC are common in serious control applications.
+
+## Regularization
+
+When the inverse problem is noisy, non-unique, or ill-conditioned, we often solve a regularized problem:
+
+$$
+\min_z \|F(z)-d\|^2 + \lambda \|Lz\|^2.
+$$
+
+Here:
+
+- $z$ is the unknown input, parameter, or trajectory,
+- $F(z)$ is the forward model prediction,
+- $d$ is the desired or measured data,
+- $\|F(z)-d\|^2$ asks the model to match the target,
+- $\lambda \|Lz\|^2$ penalizes unreasonable solutions.
+
+For control, $Lz$ might penalize large commands, fast command changes, jerk, or rough trajectories.
+
+A constrained version is often more realistic:
+
+$$
+\begin{aligned}
+\min_z \quad & \|F(z)-d\|^2 + \lambda \|Lz\|^2 \\
+\text{subject to} \quad & z_{\min} \le z \le z_{\max}, \\
+& \Delta z_{\min} \le \Delta z \le \Delta z_{\max}, \\
+& x_{\min} \le x \le x_{\max}.
+\end{aligned}
+$$
+
+This is no longer just inversion. It is inverse modeling plus optimization.
+
+## Practical Workflow
+
+A useful workflow for inverse-model feedforward is:
+
+1. Define the desired output or trajectory.
+2. Write the forward model.
+3. Derive the inverse algebraically if the model is simple.
+4. If the inverse is not simple, solve a constrained optimization problem.
+5. Check feasibility against actuator and state limits.
+6. Smooth the reference and avoid noisy derivatives.
+7. Simulate the command through the forward model.
+8. Add feedback to correct model errors and disturbances.
+
+The final controller is usually
+
+$$
+u(t) = u_{\text{ff}}(t) + u_{\text{fb}}(t).
+$$
+
+Feedforward handles the planned physics. Feedback handles what the inverse model did not know.
+
+## The Core Lesson
+
+Inverse problems are powerful because they turn desired behavior into action. They are dangerous when treated as exact.
+
+The engineering question is not only:
+
+> Can I invert the model?
+
+The better question is:
+
+> Is the inverse command unique, stable, feasible, and robust enough to use?
+
+That question connects inverse modeling directly to optimization, constraints, and feedback control.
