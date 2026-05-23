@@ -6,6 +6,7 @@ blogdown
 .DS_Store
 deploy.sh
 public*/
+docs/
 ISSUES.md
 .history/
 content/project/sqrrl/index_cache/*
